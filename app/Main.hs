@@ -5,16 +5,29 @@ import Brick.Widgets.Center qualified as Brick
 import Brick.Widgets.Table qualified as Brick.Table
 import Control.Lens (Lens', (%~), (.~), (^?))
 import Control.Lens qualified as Lens
+import Control.Monad.State (evalState, state)
+import Data.Dependent.Map (DMap)
+import Data.Dependent.Map qualified as DMap
 import Data.Foldable (fold)
 import Data.Function ((&))
 import Data.Functor ((<&>))
 import Data.Functor.Identity (Identity (..))
+import Data.GADT.Compare (GCompare (..), GEq (..), GOrdering (..))
 import Data.List qualified as List
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Set (Set)
 import Data.Set qualified as Set
 import Graphics.Vty qualified as Vty
+import System.Environment qualified as Env
+import System.Random qualified as Random
+import System.Random.Shuffle qualified as Shuffle
+
+class Universe t where
+  universe :: [t]
+
+instance Universe Bool where
+  universe = [False, True]
 
 data Names
   deriving stock (Show, Eq, Ord)
@@ -24,6 +37,9 @@ data Digit = D1 | D2 | D3 | D4 | D5 | D6 | D7 | D8 | D9
 
 digits :: [Digit]
 digits = [D1 .. D9]
+
+instance Universe Digit where
+  universe = digits
 
 digitToInt :: Digit -> Int
 digitToInt = succ . fromEnum
@@ -52,6 +68,9 @@ bandToInt = succ . fromEnum
 bands :: [Band]
 bands = [B1, B2, B3]
 
+instance Universe Band where
+  universe = bands
+
 newtype Col v = Col v
   deriving newtype (Show, Eq, Ord, Bounded)
 
@@ -60,6 +79,12 @@ newtype Row v = Row v
 
 data Loc v = Loc (Col v) (Row v)
   deriving stock (Show, Eq, Ord, Bounded)
+
+bandedLocation :: Band -> Band -> Band -> Band -> Loc Digit
+bandedLocation bigCol bigRow lilCol lilRow =
+  Loc
+    (Col (digitFromInt $ (bandToInt bigCol * 3) + bandToInt lilCol))
+    (Row (digitFromInt $ (bandToInt bigRow * 3) + bandToInt lilRow))
 
 data Cell = Given Digit | Input (Maybe Digit)
   deriving stock (Show, Eq, Ord)
@@ -109,6 +134,11 @@ onLocCol t (Loc (Col c) r) = t c <&> \v -> Loc (Col v) r
 
 onLocRow :: Lens' (Loc v) v
 onLocRow t (Loc c (Row r)) = t r <&> \v -> Loc c (Row v)
+
+onGiven :: Lens.Prism' Cell Digit
+onGiven = Lens.prism' Given \case
+  Given v -> Just v
+  _ -> Nothing
 
 onInput :: Lens.Prism' Cell (Maybe Digit)
 onInput = Lens.prism' Input \case
@@ -311,10 +341,10 @@ drawBands ::
   Brick.Widget Names
 drawBands f =
   Brick.hBox $
-    bands <&> \bigCol ->
+    bands <&> \col ->
       Brick.vBox $
-        bands <&> \bigRow ->
-          f bigCol bigRow
+        bands <&> \row ->
+          f col row
 
 bandedGridLocation :: Band -> Band -> Band -> Band -> Loc Digit
 bandedGridLocation bigCol bigRow lilCol lilRow = do
@@ -480,12 +510,6 @@ appDraw sudokuState =
       ]
     ]
 
-class Universe t where
-  universe :: [t]
-
-instance Universe Bool where
-  universe = [False, True]
-
 data CellContent = CellContentGiven | CellContentBlank | CellContentInput
 
 instance Universe CellContent where
@@ -558,108 +582,116 @@ withMatched xs cs = cs {cellMatched = Any xs}
 withFocussed :: [Bool] -> CellState Pat -> CellState Pat
 withFocussed xs cs = cs {cellFocussed = Any xs}
 
-type Colour = Bool -> Vty.Color
-
 data Styling t where
-  ForeColour :: Styling Colour
+  ForeColour :: Styling Vty.Color
   ForeBright :: Styling Bool
-  BackColour :: Styling Colour
+  BackColour :: Styling Vty.Color
   BackBright :: Styling Bool
   IsBold :: Styling Bool
 
-newtype Style f = Style {getStyle :: forall i. Styling i -> f i}
+-- import Data.GADT.Compare.TH (deriveGCompare, deriveGEq)
+-- deriveGEq ''Styling
+-- deriveGCompare ''Styling
 
-unknownStyle :: Style Maybe
-unknownStyle = Style \_ -> Nothing
+instance GEq Styling where
+  geq ForeColour ForeColour = Just Lens.Refl
+  geq ForeBright ForeBright = Just Lens.Refl
+  geq BackColour BackColour = Just Lens.Refl
+  geq BackBright BackBright = Just Lens.Refl
+  geq IsBold IsBold = Just Lens.Refl
+  geq _ _ = Nothing
 
-setForeColour :: Colour -> Style Maybe -> Style Maybe
-setForeColour c s = Style \case
-  ForeColour -> Just c
-  k -> getStyle s k
+instance GCompare Styling where
+  gcompare ForeColour ForeColour = GEQ
+  gcompare ForeColour _ = GLT
+  gcompare _ ForeColour = GGT
+  gcompare ForeBright ForeBright = GEQ
+  gcompare ForeBright _ = GLT
+  gcompare _ ForeBright = GGT
+  gcompare BackColour BackColour = GEQ
+  gcompare BackColour _ = GLT
+  gcompare _ BackColour = GGT
+  gcompare BackBright BackBright = GEQ
+  gcompare BackBright _ = GLT
+  gcompare _ BackBright = GGT
+  gcompare IsBold IsBold = GEQ
 
-setForeBright :: Bool -> Style Maybe -> Style Maybe
-setForeBright c s = Style \case
-  ForeBright -> Just c
-  k -> getStyle s k
+type Style = DMap Styling Identity
 
-setBackColour :: Colour -> Style Maybe -> Style Maybe
-setBackColour c s = Style \case
-  BackColour -> Just c
-  k -> getStyle s k
+infix 0 .==
 
-setBackBright :: Bool -> Style Maybe -> Style Maybe
-setBackBright c s = Style \case
-  BackBright -> Just c
-  k -> getStyle s k
-
-setIsBold :: Bool -> Style Maybe -> Style Maybe
-setIsBold c s = Style \case
-  IsBold -> Just c
-  k -> getStyle s k
+(.==) :: Styling t -> t -> Style -> Style
+(.==) k c s = DMap.insert k (Identity c) s
 
 compose :: [a -> a] -> a -> a
 compose = foldr (.) id
 
-styleAttr :: (Style Maybe -> Style Maybe) -> Vty.Attr -> Vty.Attr
+brightISO :: Bool -> Vty.Color -> Vty.Color
+brightISO True (Vty.ISOColor n) = Vty.ISOColor (mod n 8 + 8)
+brightISO _ c = c
+
+styleAttr :: (Style -> Style) -> Vty.Attr -> Vty.Attr
 styleAttr onStyle = do
-  let (Style style) = onStyle unknownStyle
+  let stylings :: DMap Styling Identity
+      stylings = onStyle DMap.empty
+
+  let foreBright :: Bool
+      foreBright = any runIdentity (DMap.lookup ForeBright stylings)
+
+  let backBright :: Bool
+      backBright = any runIdentity (DMap.lookup BackBright stylings)
+
   compose
-    [ case style ForeColour of
-        Nothing -> id
-        Just foreColour -> (`Vty.withForeColor` foreColour (or $ style ForeBright)),
-      case style BackColour of
-        Nothing -> id
-        Just backColour -> (`Vty.withBackColor` backColour (or $ style BackBright)),
-      case style IsBold of
-        Nothing -> id
-        Just False -> (`Vty.withStyle` Vty.defaultStyleMask)
-        Just True -> (`Vty.withStyle` Vty.bold)
+    [ DMap.lookup ForeColour stylings & maybe id \(Identity foreColour) ->
+        (`Vty.withForeColor` brightISO foreBright foreColour),
+      DMap.lookup BackColour stylings & maybe id \(Identity backColour) ->
+        (`Vty.withBackColor` brightISO backBright backColour),
+      DMap.lookup IsBold stylings & maybe id \(Identity isBold) -> case isBold of
+        False -> (`Vty.withStyle` Vty.defaultStyleMask)
+        True -> (`Vty.withStyle` Vty.bold)
     ]
 
+rule :: a -> [b -> b] -> (a, b -> b)
+rule a b = (a, compose b)
+
 cascade ::
-  [(CellState Pat -> CellState Pat, Style Maybe -> Style Maybe)] ->
+  [(CellState Pat -> CellState Pat, Style -> Style)] ->
   [(Brick.AttrName, Vty.Attr)]
 cascade xs = do
-  let expanded :: [(Brick.AttrName, Style Maybe -> Style Maybe)]
+  let expanded :: [(Brick.AttrName, Style -> Style)]
       expanded = do
         (csp, sty) <- xs
         cs <- traverseCellState resolvePat (csp anyCellState)
         [(cellStateAttrName cs, sty)]
 
-  let onAttrs :: (Style Maybe -> Style Maybe) -> Vty.Attr
+  let onAttrs :: (Style -> Style) -> Vty.Attr
       onAttrs st = styleAttr st Vty.defAttr
 
   Map.toList $ Map.fromListWith (.) expanded <&> onAttrs
 
-colourWhite :: Colour
-colourWhite False = Vty.white
-colourWhite True = Vty.brightWhite
-
-colourBlack :: Colour
-colourBlack False = Vty.black
-colourBlack True = Vty.brightBlack
-
-colourBlue :: Colour
-colourBlue False = Vty.blue
-colourBlue True = Vty.brightBlue
-
-colourGreen :: Colour
-colourGreen False = Vty.green
-colourGreen True = Vty.brightGreen
-
-colourCyan :: Colour
-colourCyan False = Vty.cyan
-colourCyan True = Vty.brightCyan
-
 cellAttrMap :: [(Brick.AttrName, Vty.Attr)]
 cellAttrMap =
   cascade
-    [ (withCell, setBackColour colourWhite),
-      (withContent [CellContentGiven], setForeColour colourBlack),
-      (withContent [CellContentBlank, CellContentInput], setForeColour colourBlue),
-      (withFocussed [True], setBackBright True),
-      (withMatched [True], setIsBold True . setBackColour colourGreen),
-      (withSelected [True], setBackColour colourCyan)
+    [ rule
+        withCell
+        [BackColour .== Vty.white],
+      rule
+        (withContent [CellContentGiven])
+        [ForeColour .== Vty.black],
+      rule
+        (withContent [CellContentBlank, CellContentInput])
+        [ForeColour .== Vty.blue],
+      rule
+        (withFocussed [True])
+        [BackBright .== True],
+      rule
+        (withMatched [True])
+        [ IsBold .== True,
+          BackColour .== Vty.green
+        ],
+      rule
+        (withSelected [True])
+        [BackColour .== Vty.cyan]
     ]
 
 modeAttrMap :: [(Brick.AttrName, Vty.Attr)]
@@ -785,11 +817,69 @@ initMarks = Map.fromList do
   col <- digits
   [(Loc (Col col) (Row row), Set.empty)]
 
-initSudokuState :: SudokuState
-initSudokuState =
+data ShufflingSeeds a = ShufflingSeeds
+  { _digitsSeed :: a,
+    _bigColSeed :: a,
+    _bigRowSeed :: a,
+    _lilColSeed :: a,
+    _lilRowSeed :: a
+  }
+  deriving stock (Functor, Foldable, Traversable)
+
+instance Applicative ShufflingSeeds where
+  pure x = ShufflingSeeds x x x x x
+  l <*> r =
+    ShufflingSeeds
+      { _digitsSeed = _digitsSeed l (_digitsSeed r),
+        _bigColSeed = _bigColSeed l (_bigColSeed r),
+        _bigRowSeed = _bigRowSeed l (_bigRowSeed r),
+        _lilColSeed = _lilColSeed l (_lilColSeed r),
+        _lilRowSeed = _lilRowSeed l (_lilRowSeed r)
+      }
+
+shufflingSeeds :: Random.StdGen -> ShufflingSeeds Random.StdGen
+shufflingSeeds = evalState $ sequence (pure $ state Random.split)
+
+shuffleUniverse :: forall a. (Ord a, Universe a) => Random.StdGen -> a -> a
+shuffleUniverse seed = do
+  let unsafeIndex = (Map.!)
+  -- under the assumption that universe does indeed contain all possible
+  -- inhabitants of a, the map will be total
+  unsafeIndex $ Map.fromList do
+    let items = universe @a
+    zip
+      items
+      (Shuffle.shuffle' items (length items) seed)
+
+shuffleLoc :: ShufflingSeeds Random.StdGen -> Loc Digit -> Loc Digit
+shuffleLoc ShufflingSeeds {..} = do
+  let unsafeIndex = (Map.!)
+  -- the map will be total as every loc is covered by the bands
+  unsafeIndex $ Map.fromList do
+    bigCol <- bands
+    bigRow <- bands
+    lilCol <- bands
+    lilRow <- bands
+    pure
+      ( bandedLocation bigCol bigRow lilCol lilRow,
+        bandedLocation
+          (shuffleUniverse _bigColSeed bigCol)
+          (shuffleUniverse _bigRowSeed bigRow)
+          (shuffleUniverse _lilColSeed lilCol)
+          (shuffleUniverse _lilRowSeed lilRow)
+      )
+
+shuffledGrid :: ShufflingSeeds Random.StdGen -> Grid -> Grid
+shuffledGrid seeds initialGrid =
+  initialGrid
+    & traverse . onGiven %~ shuffleUniverse (_digitsSeed seeds)
+    & Map.mapKeys (shuffleLoc seeds)
+
+initSudokuState :: ShufflingSeeds Random.StdGen -> SudokuState
+initSudokuState seeds =
   MkSudokuState
     { showHelp = True,
-      grid = Map.fromList do
+      grid = shuffledGrid seeds $ Map.fromList do
         (row, initRow) <- zip digits (initGrid [Input Nothing] \d -> [Given d])
         (col, initCell) <- zip digits initRow
         cell <- initCell
@@ -805,7 +895,12 @@ initSudokuState =
 
 main :: IO ()
 main = do
+  seed <-
+    Env.lookupEnv "SEED" >>= \case
+      Just v -> pure $ Random.mkStdGen (read v)
+      Nothing -> Random.initStdGen
+  let seeds = shufflingSeeds seed
   let builder = Vty.mkVty Vty.defaultConfig
   initialVty <- builder
-  _ <- Brick.customMain initialVty builder Nothing app initSudokuState
+  _ <- Brick.customMain initialVty builder Nothing app (initSudokuState seeds)
   pure ()

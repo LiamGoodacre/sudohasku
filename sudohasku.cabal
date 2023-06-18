@@ -29,13 +29,19 @@ executable sudoku-tui
     OverloadedStrings,
     RecordWildCards,
     StrictData,
+    TemplateHaskell,
     ViewPatterns
   build-depends:
     base,
     brick,
     containers,
-    vty,
-    lens
+    dependent-map,
+    dependent-sum,
+    lens,
+    mtl,
+    random,
+    random-shuffle,
+    vty
   hs-source-dirs:   app
   default-language: GHC2021
   ghc-options: -threaded -rtsopts
