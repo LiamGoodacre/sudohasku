@@ -19,6 +19,10 @@ common warnings
 executable sudoku-tui
   import:           warnings
   main-is:          Main.hs
+  other-modules:
+    Domain,
+    Drawing,
+    Shuffling
   default-extensions:
     ApplicativeDo,
     BlockArguments,
