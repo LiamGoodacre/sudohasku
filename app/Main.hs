@@ -62,11 +62,14 @@ prevDigit = fst . surroundingDigits
 data Band = B1 | B2 | B3
   deriving stock (Show, Eq, Ord, Enum, Bounded)
 
+bands :: [Band]
+bands = [B1, B2, B3]
+
 bandToInt :: Band -> Int
 bandToInt = succ . fromEnum
 
-bands :: [Band]
-bands = [B1, B2, B3]
+bandFromInt :: Int -> Band
+bandFromInt i = bands !! mod (pred i) 3
 
 instance Universe Band where
   universe = bands
@@ -80,12 +83,6 @@ newtype Row v = Row v
 data Loc v = Loc (Col v) (Row v)
   deriving stock (Show, Eq, Ord, Bounded)
 
-bandedLocation :: Band -> Band -> Band -> Band -> Loc Digit
-bandedLocation bigCol bigRow lilCol lilRow =
-  Loc
-    (Col (digitFromInt $ (bandToInt bigCol * 3) + bandToInt lilCol))
-    (Row (digitFromInt $ (bandToInt bigRow * 3) + bandToInt lilRow))
-
 data Cell = Given Digit | Input (Maybe Digit)
   deriving stock (Show, Eq, Ord)
 
@@ -96,7 +93,7 @@ type Marks = Map (Loc Digit) (Set Digit)
 data HighsOrLows = Highs | Lows
   deriving stock (Show, Eq, Ord)
 
-data Mode = Normal | Mark HighsOrLows | Highlight
+data Mode = Normal | Mark HighsOrLows | Highlight | Jump
   deriving stock (Show, Eq, Ord)
 
 data Direction = North | East | South | West
@@ -183,6 +180,18 @@ shiftFocus = \case
   East -> onFocus . onLocCol %~ nextDigit
   South -> onFocus . onLocRow %~ nextDigit
   West -> onFocus . onLocCol %~ prevDigit
+
+boxToCenterMidLoc :: Digit -> Loc Digit
+boxToCenterMidLoc (digitToInt -> d) = do
+  let (bigRow, bigCol) = divMod (d - 1) 3
+  bandedGridLocation
+    (bandFromInt (bigCol + 1))
+    (bandFromInt (bigRow + 1))
+    B2
+    B2
+
+jumpFocus :: Digit -> SudokuState -> SudokuState
+jumpFocus d = onFocus .~ boxToCenterMidLoc d
 
 updateSelection :: Selection -> SudokuState -> SudokuState
 updateSelection = \case
@@ -285,12 +294,14 @@ actOn = \case
         Normal -> st & enter digit
         Mark highLow -> st & updateMarks highLow digit
         Highlight -> st & updateMatch (Just digit)
+        Jump -> st & jumpFocus digit
   Remove -> do
     Brick.modify \st ->
       case mode st of
         Normal -> st & removeNormal
         Mark highLow -> st & removeMarks highLow
         Highlight -> st & removeHighlight
+        Jump -> st
   NoHighlight -> do
     Brick.modify \st -> st & updateMatch Nothing
 
@@ -424,6 +435,8 @@ drawHelp = do
           ("Set Mode Highlight", "'/'", "*"),
           ("Highlight focussed", "'/'", "Highlight"),
           ("Highlight digit", "'1-9'", "Highlight"),
+          ("Set Mode Jump", "'g'", "*"),
+          ("Jump to box", "'1-9'", "Jump"),
           ("No Highlight", "'!'", "*"),
           ("Toggle select cell", "'x'", "*"),
           ("Clear selection", "'X'", "*"),
@@ -482,7 +495,8 @@ screenDraw sudokuState =
             Normal -> Brick.attrName "mode-normal"
             Mark Highs -> Brick.attrName "mode-high-mark"
             Mark Lows -> Brick.attrName "mode-low-mark"
-            Highlight -> Brick.attrName "mode-highlight",
+            Highlight -> Brick.attrName "mode-highlight"
+            Jump -> Brick.attrName "mode-jump",
       Brick.str $ "Last action = " <> maybe "none" show (lastAction sudokuState)
     ]
 
@@ -711,6 +725,10 @@ modeAttrMap =
     ( Brick.attrName "mode-highlight",
       Vty.defAttr
         `Vty.withBackColor` Vty.green
+    ),
+    ( Brick.attrName "mode-jump",
+      Vty.defAttr
+        `Vty.withBackColor` Vty.magenta
     )
   ]
 
@@ -771,6 +789,7 @@ appHandleEvent = \case
     Vty.EvKey (Vty.KChar 'm') _ -> act (SwitchMode (Mark Highs))
     Vty.EvKey (Vty.KChar 'M') _ -> act (SwitchMode (Mark Lows))
     Vty.EvKey (Vty.KChar '/') _ -> act (SwitchMode Highlight)
+    Vty.EvKey (Vty.KChar 'g') _ -> act (SwitchMode Jump)
     Vty.EvKey (Vty.KChar '!') _ -> act NoHighlight
     Vty.EvKey (Vty.KChar 'x') _ -> act ToggleSelect
     Vty.EvKey (Vty.KChar 'X') _ -> act ClearSelect
@@ -861,8 +880,8 @@ shuffleLoc ShufflingSeeds {..} = do
     lilCol <- bands
     lilRow <- bands
     pure
-      ( bandedLocation bigCol bigRow lilCol lilRow,
-        bandedLocation
+      ( bandedGridLocation bigCol bigRow lilCol lilRow,
+        bandedGridLocation
           (shuffleUniverse _bigColSeed bigCol)
           (shuffleUniverse _bigRowSeed bigRow)
           (shuffleUniverse _lilColSeed lilCol)
