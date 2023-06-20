@@ -1,4 +1,28 @@
-module Domain where
+module Domain
+  ( Action (..),
+    Band (..),
+    Cell (..),
+    CellCol (..),
+    CellLoc (..),
+    CellRow (..),
+    Digit (..),
+    Direction (..),
+    Grid,
+    HighsOrLows (..),
+    Marks,
+    Mode (..),
+    Selection (..),
+    SudokuState (..),
+    Universe (..),
+    bandedGridCellLocation,
+    bands,
+    digitToInt,
+    digits,
+    onCellGiven,
+    onLastAction,
+    runAction,
+  )
+where
 
 import Control.Lens (Lens', (%~), (.~), (^?))
 import Control.Lens qualified as Lens
@@ -31,24 +55,6 @@ bandFromInt i = bands !! mod (pred i) 3
 
 instance Universe Band where
   universe = bands
-
-data PathPos t = PathPos
-  { posBigCol :: t,
-    posBigRow :: t,
-    posLilCol :: t,
-    posLilRow :: t
-  }
-  deriving stock (Functor, Foldable, Traversable)
-
-instance Applicative PathPos where
-  pure x = PathPos x x x x
-  l <*> r =
-    PathPos
-      { posBigCol = posBigCol l (posBigCol r),
-        posBigRow = posBigRow l (posBigRow r),
-        posLilCol = posLilCol l (posLilCol r),
-        posLilRow = posLilRow l (posLilRow r)
-      }
 
 --
 

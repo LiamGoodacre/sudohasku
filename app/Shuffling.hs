@@ -1,4 +1,9 @@
-module Shuffling where
+module Shuffling
+  ( ShufflingSeeds (..),
+    shuffledGrid,
+    shufflingSeeds,
+  )
+where
 
 import Control.Lens ((%~))
 import Control.Monad.State (evalState, state)
@@ -8,6 +13,24 @@ import Data.Map.Strict qualified as Map
 import Domain
 import System.Random qualified as Random
 import System.Random.Shuffle qualified as Shuffle
+
+data PathPos t = PathPos
+  { posBigCol :: t,
+    posBigRow :: t,
+    posLilCol :: t,
+    posLilRow :: t
+  }
+  deriving stock (Functor, Foldable, Traversable)
+
+instance Applicative PathPos where
+  pure x = PathPos x x x x
+  l <*> r =
+    PathPos
+      { posBigCol = posBigCol l (posBigCol r),
+        posBigRow = posBigRow l (posBigRow r),
+        posLilCol = posLilCol l (posLilCol r),
+        posLilRow = posLilRow l (posLilRow r)
+      }
 
 data ShufflingSeeds a = ShufflingSeeds
   { digitsSeed :: a,

@@ -1,4 +1,8 @@
-module Drawing where
+module Drawing
+  ( appDraw,
+    appAttrMap,
+  )
+where
 
 import Brick qualified as Brick
 import Brick.Widgets.Center qualified as Brick
@@ -17,12 +21,6 @@ import Data.Set (Set)
 import Data.Set qualified as Set
 import Domain
 import Graphics.Vty qualified as Vty
-
-smallDigitToString :: Digit -> String
-smallDigitToString = show . succ . fromEnum
-
-drawSmallDigit :: Maybe Digit -> Brick.Widget names
-drawSmallDigit = Brick.str . maybe " " smallDigitToString
 
 drawMarks :: Set Digit -> Set Digit -> Brick.Widget names
 drawMarks highs lows = do
@@ -189,7 +187,7 @@ screenDraw sudokuState =
     [ Brick.hBox
         [ Brick.str $ "Mode = " <> show (mode sudokuState),
           Brick.str ", ",
-          Brick.str $ "Matching = " <> maybe "none" smallDigitToString (match sudokuState)
+          Brick.str $ "Matching = " <> maybe "none" (show . digitToInt) (match sudokuState)
         ],
       drawGrid sudokuState
         & Brick.withDefAttr
