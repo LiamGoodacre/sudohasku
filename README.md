@@ -3,5 +3,4 @@ sudoku terminal game using haskell brick
 
 Work in progress.
 
-![image](https://github.com/LiamGoodacre/sudohasku/assets/1189645/e0785d46-35f4-4065-b040-7d63710950b5)
-
+![image](https://github.com/LiamGoodacre/sudohasku/assets/1189645/fa692470-d416-4286-a878-012e3e680e0d)
