@@ -4,7 +4,7 @@ module Main
 where
 
 import Brick qualified as Brick
-import Control.Lens ((.~))
+import Control.Lens ((%~), (.~))
 import Data.Function ((&))
 import Data.Functor ((<&>))
 import Data.Map.Strict qualified as Map
@@ -17,11 +17,19 @@ import Shuffling qualified
 import System.Environment qualified as Env
 import System.Random qualified as Random
 
-act :: Action -> Brick.EventM names SudokuState ()
+act :: Action -> Brick.EventM names Game ()
 act action =
-  Brick.modify \st ->
-    Domain.runAction action st
-      & onLastAction .~ Just action
+  Brick.modify \st -> do
+    let next =
+          Domain.runAction action st
+            & onLastAction .~ Just action
+
+    if undoableAction action && sudoku next /= sudoku st
+      then
+        next
+          & onFuture .~ []
+          & onHistory %~ (sudoku st :)
+      else next
 
 keyCharDigit :: Char -> Maybe Digit
 keyCharDigit = \case
@@ -36,14 +44,14 @@ keyCharDigit = \case
   '9' -> Just D9
   _ -> Nothing
 
-appHandleEvent :: Brick.BrickEvent names e -> Brick.EventM names SudokuState ()
+appHandleEvent :: Brick.BrickEvent names e -> Brick.EventM names Game ()
 appHandleEvent = \case
   Brick.VtyEvent vtyEvent -> case vtyEvent of
     Vty.EvKey (Vty.KChar 'c') [Vty.MCtrl] -> Brick.halt
     Vty.EvKey (Vty.KChar '?') _ -> act ToggleHelp
-    Vty.EvKey Vty.KEsc _ -> act (SwitchMode Normal)
-    Vty.EvKey (Vty.KChar '[') [Vty.MCtrl] -> act (SwitchMode Normal)
-    Vty.EvKey (Vty.KChar 'i') _ -> act (SwitchMode Normal)
+    Vty.EvKey Vty.KEsc _ -> act (SwitchMode Insert)
+    Vty.EvKey (Vty.KChar '[') [Vty.MCtrl] -> act (SwitchMode Insert)
+    Vty.EvKey (Vty.KChar 'i') _ -> act (SwitchMode Insert)
     Vty.EvKey (Vty.KChar 'm') _ -> act (SwitchMode (Mark Highs))
     Vty.EvKey (Vty.KChar 'M') _ -> act (SwitchMode (Mark Lows))
     Vty.EvKey (Vty.KChar '/') _ -> act (SwitchMode Highlight)
@@ -60,12 +68,14 @@ appHandleEvent = \case
     Vty.EvKey (Vty.KChar 'L') _ -> act (Move Expand East)
     Vty.EvKey (Vty.KChar 'J') _ -> act (Move Expand South)
     Vty.EvKey (Vty.KChar 'H') _ -> act (Move Expand West)
+    Vty.EvKey (Vty.KChar 'u') _ -> act Undo
+    Vty.EvKey (Vty.KChar 'r') _ -> act Redo
     Vty.EvKey (Vty.KChar c) _
       | Just d <- keyCharDigit c -> act (Enter d)
     _ -> pure ()
   _ -> pure ()
 
-app :: Brick.App SudokuState e Void
+app :: Brick.App Game e Void
 app =
   Brick.App
     { Brick.appDraw = Drawing.appDraw,
@@ -93,22 +103,27 @@ initMarks = Map.fromList do
   sequence (CellLoc (CellCol digits) (CellRow digits))
     <&> \loc -> (loc, Set.empty)
 
-initSudokuState :: Shuffling.ShufflingSeeds Random.StdGen -> SudokuState
-initSudokuState seeds =
-  MkSudokuState
+initGame :: Shuffling.ShufflingSeeds Random.StdGen -> Game
+initGame seeds =
+  MkGame
     { showHelp = True,
-      grid = Shuffling.shuffledGrid seeds $ Map.fromList do
-        (row, initRow) <- zip digits (initGrid [Input Nothing] \d -> [Given d])
-        (col, initCell) <- zip digits initRow
-        cell <- initCell
-        [(CellLoc (CellCol col) (CellRow row), cell)],
-      highs = initMarks,
-      lows = initMarks,
       selected = Set.empty,
       focussed = CellLoc (CellCol D5) (CellRow D5),
-      mode = Normal,
+      mode = Insert,
       match = Nothing,
-      lastAction = Nothing
+      lastAction = Nothing,
+      sudoku =
+        MkSudoku
+          { grid = Shuffling.shuffledGrid seeds $ Map.fromList do
+              (row, initRow) <- zip digits (initGrid [Input Nothing] \d -> [Given d])
+              (col, initCell) <- zip digits initRow
+              cell <- initCell
+              [(CellLoc (CellCol col) (CellRow row), cell)],
+            highs = initMarks,
+            lows = initMarks
+          },
+      history = [],
+      future = []
     }
 
 main :: IO ()
@@ -120,5 +135,5 @@ main = do
   let seeds = Shuffling.shufflingSeeds seed
   let builder = Vty.mkVty Vty.defaultConfig
   initialVty <- builder
-  _ <- Brick.customMain initialVty builder Nothing app (initSudokuState seeds)
+  _ <- Brick.customMain initialVty builder Nothing app (initGame seeds)
   pure ()

@@ -12,7 +12,8 @@ module Domain
     Marks,
     Mode (..),
     Selection (..),
-    SudokuState (..),
+    Sudoku (..),
+    Game (..),
     Universe (..),
     bandedGridCellLocation,
     bands,
@@ -20,6 +21,9 @@ module Domain
     digits,
     onCellGiven,
     onLastAction,
+    onHistory,
+    onFuture,
+    undoableAction,
     runAction,
   )
 where
@@ -99,8 +103,24 @@ data CellLoc v = CellLoc (CellCol v) (CellRow v)
   deriving stock (Show, Eq, Ord, Bounded)
   deriving stock (Functor, Foldable, Traversable)
 
+onCellLocCol :: Lens' (CellLoc v) v
+onCellLocCol t (CellLoc (CellCol c) r) = t c <&> \v -> CellLoc (CellCol v) r
+
+onCellLocRow :: Lens' (CellLoc v) v
+onCellLocRow t (CellLoc c (CellRow r)) = t r <&> \v -> CellLoc c (CellRow v)
+
 data Cell = Given Digit | Input (Maybe Digit)
   deriving stock (Show, Eq, Ord)
+
+onCellGiven :: Lens.Prism' Cell Digit
+onCellGiven = Lens.prism' Given \case
+  Given v -> Just v
+  _ -> Nothing
+
+onCellInput :: Lens.Prism' Cell (Maybe Digit)
+onCellInput = Lens.prism' Input \case
+  Input v -> Just v
+  _ -> Nothing
 
 type Grid = Map (CellLoc Digit) Cell
 
@@ -109,7 +129,7 @@ type Marks = Map (CellLoc Digit) (Set Digit)
 data HighsOrLows = Highs | Lows
   deriving stock (Show, Eq, Ord)
 
-data Mode = Normal | Mark HighsOrLows | Highlight | Jump
+data Mode = Insert | Mark HighsOrLows | Highlight | Jump
   deriving stock (Show, Eq, Ord)
 
 data Direction = North | East | South | West
@@ -127,76 +147,76 @@ data Action
   | Move Selection Direction
   | Enter Digit
   | Remove
+  | Undo
+  | Redo
   deriving stock (Show, Eq, Ord)
 
-data SudokuState = MkSudokuState
-  { showHelp :: Bool,
-    grid :: Grid,
+data Sudoku = MkSudoku
+  { grid :: Grid,
     highs :: Marks,
-    lows :: Marks,
-    selected :: Set (CellLoc Digit),
-    focussed :: CellLoc Digit,
-    mode :: Mode,
-    match :: Maybe Digit,
-    lastAction :: Maybe Action
+    lows :: Marks
   }
   deriving stock (Show, Eq, Ord)
 
---
-
-onCellLocCol :: Lens' (CellLoc v) v
-onCellLocCol t (CellLoc (CellCol c) r) = t c <&> \v -> CellLoc (CellCol v) r
-
-onCellLocRow :: Lens' (CellLoc v) v
-onCellLocRow t (CellLoc c (CellRow r)) = t r <&> \v -> CellLoc c (CellRow v)
-
-onCellGiven :: Lens.Prism' Cell Digit
-onCellGiven = Lens.prism' Given \case
-  Given v -> Just v
-  _ -> Nothing
-
-onCellInput :: Lens.Prism' Cell (Maybe Digit)
-onCellInput = Lens.prism' Input \case
-  Input v -> Just v
-  _ -> Nothing
-
-onShowHelp :: Lens' SudokuState Bool
-onShowHelp t s = t (showHelp s) <&> \v -> s {showHelp = v}
-
-onGrid :: Lens' SudokuState Grid
+onGrid :: Lens' Sudoku Grid
 onGrid t s = t (grid s) <&> \v -> s {grid = v}
 
-onFocus :: Lens' SudokuState (CellLoc Digit)
-onFocus t s = t (focussed s) <&> \v -> s {focussed = v}
-
-onSelected :: Lens' SudokuState (Set (CellLoc Digit))
-onSelected t s = t (selected s) <&> \v -> s {selected = v}
-
-onHighs :: Lens' SudokuState Marks
+onHighs :: Lens' Sudoku Marks
 onHighs t s = t (highs s) <&> \v -> s {highs = v}
 
-onLows :: Lens' SudokuState Marks
+onLows :: Lens' Sudoku Marks
 onLows t s = t (lows s) <&> \v -> s {lows = v}
 
-onMode :: Lens' SudokuState Mode
-onMode t s = t (mode s) <&> \v -> s {mode = v}
-
-onMatch :: Lens' SudokuState (Maybe Digit)
-onMatch t s = t (match s) <&> \v -> s {match = v}
-
-onLastAction :: Lens' SudokuState (Maybe Action)
-onLastAction t s = t (lastAction s) <&> \v -> s {lastAction = v}
-
-onHighLows :: HighsOrLows -> Lens' SudokuState Marks
+onHighLows :: HighsOrLows -> Lens' Sudoku Marks
 onHighLows = \case
   Highs -> onHighs
   Lows -> onLows
 
-onMarks :: HighsOrLows -> Set (CellLoc Digit) -> Lens.Traversal' SudokuState (Set Digit)
+onMarks :: HighsOrLows -> Set (CellLoc Digit) -> Lens.Traversal' Sudoku (Set Digit)
 onMarks highLow targets =
   onHighLows highLow
     . Lens.itraversed
     . Lens.indices (`Set.member` targets)
+
+data Game = MkGame
+  { showHelp :: Bool,
+    mode :: Mode,
+    focussed :: CellLoc Digit,
+    selected :: Set (CellLoc Digit),
+    match :: Maybe Digit,
+    sudoku :: Sudoku,
+    lastAction :: Maybe Action,
+    history :: [Sudoku],
+    future :: [Sudoku]
+  }
+  deriving stock (Show, Eq, Ord)
+
+onShowHelp :: Lens' Game Bool
+onShowHelp t s = t (showHelp s) <&> \v -> s {showHelp = v}
+
+onMode :: Lens' Game Mode
+onMode t s = t (mode s) <&> \v -> s {mode = v}
+
+onFocussed :: Lens' Game (CellLoc Digit)
+onFocussed t s = t (focussed s) <&> \v -> s {focussed = v}
+
+onSelected :: Lens' Game (Set (CellLoc Digit))
+onSelected t s = t (selected s) <&> \v -> s {selected = v}
+
+onMatch :: Lens' Game (Maybe Digit)
+onMatch t s = t (match s) <&> \v -> s {match = v}
+
+onSudoku :: Lens' Game Sudoku
+onSudoku t s = t (sudoku s) <&> \v -> s {sudoku = v}
+
+onLastAction :: Lens' Game (Maybe Action)
+onLastAction t s = t (lastAction s) <&> \v -> s {lastAction = v}
+
+onHistory :: Lens' Game [Sudoku]
+onHistory t s = t (history s) <&> \v -> s {history = v}
+
+onFuture :: Lens' Game [Sudoku]
+onFuture t s = t (future s) <&> \v -> s {future = v}
 
 --
 
@@ -217,38 +237,39 @@ boxToCenterMidCellLoc (digitToInt -> d) = do
 
 --
 
-shiftFocus :: Direction -> SudokuState -> SudokuState
+shiftFocus :: Direction -> Game -> Game
 shiftFocus = \case
-  North -> onFocus . onCellLocRow %~ prevDigit
-  East -> onFocus . onCellLocCol %~ nextDigit
-  South -> onFocus . onCellLocRow %~ nextDigit
-  West -> onFocus . onCellLocCol %~ prevDigit
+  North -> onFocussed . onCellLocRow %~ prevDigit
+  East -> onFocussed . onCellLocCol %~ nextDigit
+  South -> onFocussed . onCellLocRow %~ nextDigit
+  West -> onFocussed . onCellLocCol %~ prevDigit
 
-jumpFocus :: Digit -> SudokuState -> SudokuState
-jumpFocus d = onFocus .~ boxToCenterMidCellLoc d
+jumpFocus :: Digit -> Game -> Game
+jumpFocus d = onFocussed .~ boxToCenterMidCellLoc d
 
-updateSelection :: Selection -> SudokuState -> SudokuState
+updateSelection :: Selection -> Game -> Game
 updateSelection = \case
   Expand -> \st -> st & onSelected %~ Set.insert (focussed st)
   Reset -> onSelected .~ Set.empty
   Ignore -> id
 
-updateMarks :: HighsOrLows -> Digit -> SudokuState -> SudokuState
+updateMarks :: HighsOrLows -> Digit -> Game -> Game
 updateMarks highLow digit st = do
   let targets = Set.insert (focussed st) (selected st)
 
-  let cellDigitMark :: Lens.Traversal' SudokuState Bool
-      cellDigitMark = onMarks highLow targets . Lens.contains digit
+  let cellDigitMark :: Lens.Traversal' Game Bool
+      cellDigitMark = onSudoku . onMarks highLow targets . Lens.contains digit
 
   st & cellDigitMark .~ not (st & Lens.andOf cellDigitMark)
 
-enter :: Digit -> SudokuState -> SudokuState
+enter :: Digit -> Game -> Game
 enter digit st = do
   let targets = Set.insert (focussed st) (selected st)
 
-  let cellDigit :: Lens.Traversal' SudokuState (Maybe Digit)
+  let cellDigit :: Lens.Traversal' Game (Maybe Digit)
       cellDigit =
-        onGrid
+        onSudoku
+          . onGrid
           . Lens.itraversed
           . Lens.indices (`Set.member` targets)
           . onCellInput
@@ -257,43 +278,50 @@ enter digit st = do
 
   st & cellDigit .~ if g then Nothing else Just digit
 
-updateMatch :: Maybe Digit -> SudokuState -> SudokuState
+updateMatch :: Maybe Digit -> Game -> Game
 updateMatch digit st =
   st & onMatch .~ digit
 
-removeNormal :: SudokuState -> SudokuState
-removeNormal st = do
+removeInsert :: Game -> Game
+removeInsert st = do
   let targets = Set.insert (focussed st) (selected st)
 
-  let cellDigit :: Lens.Traversal' SudokuState (Maybe Digit)
+  let cellDigit :: Lens.Traversal' Game (Maybe Digit)
       cellDigit =
-        onGrid
+        onSudoku
+          . onGrid
           . Lens.itraversed
           . Lens.indices (`Set.member` targets)
           . onCellInput
 
   st & cellDigit .~ Nothing
 
-removeMarks :: HighsOrLows -> SudokuState -> SudokuState
+removeMarks :: HighsOrLows -> Game -> Game
 removeMarks highLow st = do
   let targets = Set.insert (focussed st) (selected st)
 
-  let cellMark :: Lens.Traversal' SudokuState (Set Digit)
-      cellMark = onMarks highLow targets
+  let cellMark :: Lens.Traversal' Game (Set Digit)
+      cellMark = onSudoku . onMarks highLow targets
 
   st & cellMark .~ Set.empty
 
-matchFocus :: SudokuState -> SudokuState
+matchFocus :: Game -> Game
 matchFocus st = do
   let maybeDigit = do
-        cell <- st ^? onGrid . Lens.itraversed . Lens.index (focussed st)
+        cell <- st ^? onSudoku . onGrid . Lens.itraversed . Lens.index (focussed st)
         case cell of
           Given d -> Just d
           Input i -> i
 
   st & updateMatch maybeDigit
 
-runAction :: Action -> SudokuState -> SudokuState
+undoableAction :: Action -> Bool
+undoableAction = \case
+  Enter {} -> True
+  Remove -> True
+  _ -> False
+
+runAction :: Action -> Game -> Game
 runAction = \case
   ToggleHelp -> onShowHelp %~ not
   ClearSelect -> onSelected .~ Set.empty
@@ -308,14 +336,32 @@ runAction = \case
     shiftFocus direction . updateSelection selection
   Enter digit -> \st ->
     st & case mode st of
-      Normal -> enter digit
+      Insert -> enter digit
       Mark highLow -> updateMarks highLow digit
       Highlight -> updateMatch (Just digit)
       Jump -> jumpFocus digit
   Remove -> \st ->
     st & case mode st of
-      Normal -> removeNormal
+      Insert -> removeInsert
       Mark highLow -> removeMarks highLow
       Highlight -> id
       Jump -> id
   NoHighlight -> updateMatch Nothing
+  Undo ->
+    \game ->
+      case history game of
+        [] -> game
+        (prev : hist) ->
+          game
+            & onHistory .~ hist
+            & onFuture %~ (sudoku game :)
+            & onSudoku .~ prev
+  Redo ->
+    \game ->
+      case future game of
+        [] -> game
+        (next : futu) ->
+          game
+            & onFuture .~ futu
+            & onHistory %~ (sudoku game :)
+            & onSudoku .~ next

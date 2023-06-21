@@ -63,15 +63,15 @@ drawBands f =
         bands <&> \row ->
           f col row
 
-drawCell :: SudokuState -> CellLoc Digit -> Brick.Widget names
-drawCell sudokuState loc = do
-  let val = Map.lookup loc (grid sudokuState)
+drawCell :: Game -> CellLoc Digit -> Brick.Widget names
+drawCell game loc = do
+  let val = Map.lookup loc (grid $ sudoku game)
 
-  let highMarks = Map.lookup loc (highs sudokuState)
-  let lowMarks = Map.lookup loc (lows sudokuState)
+  let highMarks = Map.lookup loc (highs $ sudoku game)
+  let lowMarks = Map.lookup loc (lows $ sudoku game)
 
   let matching =
-        match sudokuState & any \matchDigit ->
+        match game & any \matchDigit ->
           case val of
             Just (Given given) -> given == matchDigit
             Just (Input (Just input)) -> input == matchDigit
@@ -90,9 +90,9 @@ drawCell sudokuState loc = do
       cellState =
         CellState
           { cellContent = pure givenOrInputOrBlank,
-            cellSelected = pure (Set.member loc (selected sudokuState)),
+            cellSelected = pure (Set.member loc (selected game)),
             cellMatched = pure matching,
-            cellFocussed = pure (focussed sudokuState == loc)
+            cellFocussed = pure (focussed game == loc)
           }
 
   let cellAttrs = cellStateAttrName cellState
@@ -110,11 +110,11 @@ padGrid = Brick.padRight (Brick.Pad 2) . Brick.padBottom (Brick.Pad 1)
 padGroup :: Brick.Widget names -> Brick.Widget names
 padGroup = Brick.padTop (Brick.Pad 1) . Brick.padLeft (Brick.Pad 2)
 
-drawGrid :: SudokuState -> Brick.Widget names
-drawGrid sudokuState =
+drawGrid :: Game -> Brick.Widget names
+drawGrid game =
   padGrid $ drawBands \bigCol bigRow ->
     padGroup $ drawBands \lilCol lilRow -> do
-      drawCell sudokuState $ bandedGridCellLocation bigCol bigRow lilCol lilRow
+      drawCell game $ bandedGridCellLocation bigCol bigRow lilCol lilRow
 
 drawHelp :: Brick.Widget names
 drawHelp = do
@@ -123,19 +123,21 @@ drawHelp = do
         [ ("ACTION\n", "BINDING", "MODE"),
           ("Halt", "'Ctrl c'", "*"),
           ("Toggle help", "'?'", "*"),
-          ("Set Mode Normal", "'i', 'Esc', 'Ctrl ['", "*"),
-          ("Toggle enter digit", "'1-9'", "Normal"),
-          ("Remove entered digit", "'d'", "Normal"),
-          ("Set Mode Mark Highs", "'m'", "*"),
+          ("Undo", "'u'", "*"),
+          ("Redo", "'r'", "*"),
+          ("Set mode to Insert", "'i', 'Esc', 'Ctrl ['", "*"),
+          ("Toggle enter digit", "'1-9'", "Insert"),
+          ("Remove entered digit", "'d'", "Insert"),
+          ("Set mode to Mark Highs", "'m'", "*"),
           ("Toggle high mark digit", "'1-9'", "Mark Highs"),
           ("Remove high marks", "'d'", "Mark Highs"),
-          ("Set Mode Mark Lows", "'M'", "*"),
+          ("Set mode to Mark Lows", "'M'", "*"),
           ("Toggle low mark digit", "'1-9'", "Mark Lows"),
           ("Remove low marks", "'d'", "Mark Lows"),
-          ("Set Mode Highlight", "'/'", "*"),
+          ("Set mode to Highlight", "'/'", "*"),
           ("Highlight focussed", "'/'", "Highlight"),
           ("Highlight digit", "'1-9'", "Highlight"),
-          ("Set Mode Jump", "'g'", "*"),
+          ("Set mode to Jump", "'g'", "*"),
           ("Jump to box", "'1-9'", "Jump"),
           ("No Highlight", "'!'", "*"),
           ("Toggle select cell", "'x'", "*"),
@@ -181,23 +183,23 @@ drawHelp = do
 
   Brick.centerLayer window
 
-screenDraw :: SudokuState -> Brick.Widget names
-screenDraw sudokuState =
+screenDraw :: Game -> Brick.Widget names
+screenDraw game =
   Brick.vBox
     [ Brick.hBox
-        [ Brick.str $ "Mode = " <> show (mode sudokuState),
+        [ Brick.str $ "Mode = " <> show (mode game),
           Brick.str ", ",
-          Brick.str $ "Matching = " <> maybe "none" (show . digitToInt) (match sudokuState)
+          Brick.str $ "Matching = " <> maybe "none" (show . digitToInt) (match game)
         ],
-      drawGrid sudokuState
+      drawGrid game
         & Brick.withDefAttr
-          case mode sudokuState of
-            Normal -> Brick.attrName "mode-normal"
+          case mode game of
+            Insert -> Brick.attrName "mode-normal"
             Mark Highs -> Brick.attrName "mode-high-mark"
             Mark Lows -> Brick.attrName "mode-low-mark"
             Highlight -> Brick.attrName "mode-highlight"
             Jump -> Brick.attrName "mode-jump",
-      Brick.str $ "Last action = " <> maybe "none" show (lastAction sudokuState)
+      Brick.str $ "Last action = " <> maybe "none" show (lastAction game)
     ]
 
 logoDraw :: Brick.Widget names
@@ -212,14 +214,14 @@ logoDraw =
           " └─┘ └─┘ ┴─┘ └─┘ ┘ └ ┘ └ └─┘ ┘ ┘ └─┘ "
         ]
 
-appDraw :: SudokuState -> [Brick.Widget names]
-appDraw sudokuState =
+appDraw :: Game -> [Brick.Widget names]
+appDraw game =
   fold
-    [ if showHelp sudokuState then [drawHelp] else [],
+    [ if showHelp game then [drawHelp] else [],
       [ Brick.center do
           Brick.vBox
             [ Brick.hCenter logoDraw,
-              Brick.hCenter (screenDraw sudokuState)
+              Brick.hCenter (screenDraw game)
             ]
       ]
     ]
