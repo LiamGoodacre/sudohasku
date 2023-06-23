@@ -233,16 +233,16 @@ instance Universe CellContent where
 
 data CellState f = CellState
   { cellContent :: f CellContent,
-    cellSelected :: f Bool,
     cellMatched :: f Bool,
+    cellSelected :: f Bool,
     cellFocussed :: f Bool
   }
 
 traverseCellState :: Applicative h => (forall i. g i -> h i) -> CellState g -> h (CellState Identity)
 traverseCellState t cs = do
   cellContent <- Identity <$> t (cellContent cs)
-  cellSelected <- Identity <$> t (cellSelected cs)
   cellMatched <- Identity <$> t (cellMatched cs)
+  cellSelected <- Identity <$> t (cellSelected cs)
   cellFocussed <- Identity <$> t (cellFocussed cs)
   pure CellState {..}
 
@@ -250,20 +250,20 @@ cellStateAttrName :: CellState Identity -> Brick.AttrName
 cellStateAttrName CellState {..} =
   foldMap
     Brick.attrName
-    [ case runIdentity cellContent of
-        CellContentGiven -> "given"
-        CellContentBlank -> "blank"
-        CellContentInput -> "input",
-      case runIdentity cellSelected of
-        False -> "noselect"
-        True -> "select",
+    [ "cell",
       case runIdentity cellMatched of
         False -> "nomatch"
         True -> "match",
+      case runIdentity cellSelected of
+        False -> "noselect"
+        True -> "select",
       case runIdentity cellFocussed of
         False -> "nofocus"
         True -> "focus",
-      "cell"
+      case runIdentity cellContent of
+        CellContentGiven -> "given"
+        CellContentBlank -> "blank"
+        CellContentInput -> "input"
     ]
 
 data Pat a where
@@ -392,22 +392,22 @@ cellAttrMap =
         withCell
         [BackColour .== Vty.white],
       rule
-        (withContent [CellContentGiven])
-        [ForeColour .== Vty.black],
-      rule
-        (withContent [CellContentBlank, CellContentInput])
-        [ForeColour .== Vty.blue],
-      rule
-        (withFocussed [True])
-        [BackBright .== True],
-      rule
         (withMatched [True])
         [ IsBold .== True,
           BackColour .== Vty.green
         ],
       rule
         (withSelected [True])
-        [BackColour .== Vty.cyan]
+        [BackColour .== Vty.cyan],
+      rule
+        (withFocussed [True])
+        [BackBright .== True],
+      rule
+        (withContent [CellContentGiven])
+        [ForeColour .== Vty.black],
+      rule
+        (withContent [CellContentBlank, CellContentInput])
+        [ForeColour .== Vty.blue]
     ]
 
 modeAttrMap :: [(Brick.AttrName, Vty.Attr)]
