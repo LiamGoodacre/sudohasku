@@ -7,20 +7,71 @@ where
 import Brick qualified as Brick
 import Brick.Widgets.Center qualified as Brick
 import Brick.Widgets.Table qualified as Brick.Table
-import Control.Lens qualified as Lens
-import Data.Dependent.Map (DMap)
-import Data.Dependent.Map qualified as DMap
+import Control.Lens ((%~), (.~))
 import Data.Foldable (fold)
 import Data.Function ((&))
 import Data.Functor ((<&>))
-import Data.Functor.Identity (Identity (..))
-import Data.GADT.Compare (GCompare (..), GEq (..), GOrdering (..))
 import Data.List qualified as List
 import Data.Map.Strict qualified as Map
 import Data.Set (Set)
 import Data.Set qualified as Set
 import Domain
 import Graphics.Vty qualified as Vty
+import VtyOptic qualified as Vty
+
+data CellState t = CellState
+  { cellGiven :: !t,
+    cellMatch :: !t,
+    cellSelect :: !t,
+    cellFocus :: !t
+  }
+  deriving stock (Foldable, Functor, Traversable)
+
+instance Applicative CellState where
+  pure v = CellState v v v v
+  l <*> r =
+    CellState
+      { cellGiven = cellGiven l (cellGiven r),
+        cellMatch = cellMatch l (cellMatch r),
+        cellSelect = cellSelect l (cellSelect r),
+        cellFocus = cellFocus l (cellFocus r)
+      }
+
+instance Universe t => Universe (CellState t) where
+  universe = sequence $ pure universe
+
+cellStateFeatureNames :: CellState String
+cellStateFeatureNames =
+  CellState
+    { cellGiven = "given",
+      cellMatch = "match",
+      cellSelect = "select",
+      cellFocus = "focus"
+    }
+
+cellStateName :: CellState Bool -> Brick.AttrName
+cellStateName cs =
+  let flag :: String -> Bool -> Brick.AttrName
+      flag m b = Brick.attrName $ show (m, b)
+   in Brick.attrName "cell" <> fold (flag <$> cellStateFeatureNames <*> cs)
+
+cellStateStyle :: CellState Bool -> Vty.Attr -> Vty.Attr
+cellStateStyle CellState {..} = do
+  let (.==>.) b v = if b then v else id
+  compose $
+    reverse
+      [ Vty._attrBackColor .~ Vty.SetTo Vty.white,
+        cellMatch .==>. (`Vty.withStyle` Vty.bold),
+        cellMatch .==>. (Vty._attrBackColor .~ Vty.SetTo Vty.green),
+        cellSelect .==>. (Vty._attrBackColor .~ Vty.SetTo Vty.cyan),
+        Vty._attrBackColor . Vty._SetTo %~ (cellFocus .==>. Vty.brightISO),
+        Vty._attrForeColor .~ Vty.SetTo if cellGiven then Vty.black else Vty.blue
+      ]
+
+cellStateAttrMap :: [(Brick.AttrName, Vty.Attr)]
+cellStateAttrMap =
+  universe @(CellState Bool) <&> \cellState ->
+    (cellStateName cellState, cellStateStyle cellState Vty.defAttr)
 
 drawMarks :: Set Digit -> Set Digit -> Brick.Widget names
 drawMarks highs lows = do
@@ -81,21 +132,20 @@ drawCell game loc = do
                   fold lowMarks & Set.member matchDigit
                 ]
 
-  let givenOrInputOrBlank = case val of
-        Just (Given _) -> CellContentGiven
-        Just (Input (Just _)) -> CellContentInput
-        _ -> CellContentBlank
+  let isGiven = case val of
+        Just (Given _) -> True
+        _ -> False
 
-  let cellState :: CellState Identity
+  let cellState :: CellState Bool
       cellState =
         CellState
-          { cellContent = pure givenOrInputOrBlank,
-            cellSelected = pure (Set.member loc (selected game)),
-            cellMatched = pure matching,
-            cellFocussed = pure (focussed game == loc)
+          { cellGiven = isGiven,
+            cellSelect = Set.member loc (selected game),
+            cellMatch = matching,
+            cellFocus = focussed game == loc
           }
 
-  let cellAttrs = cellStateAttrName cellState
+  let cellAttrs = cellStateName cellState
 
   let content = case val of
         Just (Given n) -> drawBigDigit n
@@ -226,189 +276,8 @@ appDraw game =
       ]
     ]
 
-data CellContent = CellContentGiven | CellContentBlank | CellContentInput
-
-instance Universe CellContent where
-  universe = [CellContentGiven, CellContentBlank, CellContentInput]
-
-data CellState f = CellState
-  { cellContent :: f CellContent,
-    cellMatched :: f Bool,
-    cellSelected :: f Bool,
-    cellFocussed :: f Bool
-  }
-
-traverseCellState :: Applicative h => (forall i. g i -> h i) -> CellState g -> h (CellState Identity)
-traverseCellState t cs = do
-  cellContent <- Identity <$> t (cellContent cs)
-  cellMatched <- Identity <$> t (cellMatched cs)
-  cellSelected <- Identity <$> t (cellSelected cs)
-  cellFocussed <- Identity <$> t (cellFocussed cs)
-  pure CellState {..}
-
-cellStateAttrName :: CellState Identity -> Brick.AttrName
-cellStateAttrName CellState {..} =
-  foldMap
-    Brick.attrName
-    [ "cell",
-      case runIdentity cellMatched of
-        False -> "nomatch"
-        True -> "match",
-      case runIdentity cellSelected of
-        False -> "noselect"
-        True -> "select",
-      case runIdentity cellFocussed of
-        False -> "nofocus"
-        True -> "focus",
-      case runIdentity cellContent of
-        CellContentGiven -> "given"
-        CellContentBlank -> "blank"
-        CellContentInput -> "input"
-    ]
-
-data Pat a where
-  All :: Universe a => Pat a
-  Any :: [a] -> Pat a
-
-anyCellState :: CellState Pat
-anyCellState =
-  CellState
-    { cellContent = All,
-      cellSelected = All,
-      cellMatched = All,
-      cellFocussed = All
-    }
-
-resolvePat :: Pat a -> [a]
-resolvePat All = universe
-resolvePat (Any xs) = xs
-
-withCell :: CellState Pat -> CellState Pat
-withCell = id
-
-withContent :: [CellContent] -> CellState Pat -> CellState Pat
-withContent xs cs = cs {cellContent = Any xs}
-
-withSelected :: [Bool] -> CellState Pat -> CellState Pat
-withSelected xs cs = cs {cellSelected = Any xs}
-
-withMatched :: [Bool] -> CellState Pat -> CellState Pat
-withMatched xs cs = cs {cellMatched = Any xs}
-
-withFocussed :: [Bool] -> CellState Pat -> CellState Pat
-withFocussed xs cs = cs {cellFocussed = Any xs}
-
-data Styling t where
-  ForeColour :: Styling Vty.Color
-  ForeBright :: Styling Bool
-  BackColour :: Styling Vty.Color
-  BackBright :: Styling Bool
-  IsBold :: Styling Bool
-
--- import Data.GADT.Compare.TH (deriveGCompare, deriveGEq)
--- deriveGEq ''Styling
--- deriveGCompare ''Styling
-
-instance GEq Styling where
-  geq ForeColour ForeColour = Just Lens.Refl
-  geq ForeBright ForeBright = Just Lens.Refl
-  geq BackColour BackColour = Just Lens.Refl
-  geq BackBright BackBright = Just Lens.Refl
-  geq IsBold IsBold = Just Lens.Refl
-  geq _ _ = Nothing
-
-instance GCompare Styling where
-  gcompare ForeColour ForeColour = GEQ
-  gcompare ForeColour _ = GLT
-  gcompare _ ForeColour = GGT
-  gcompare ForeBright ForeBright = GEQ
-  gcompare ForeBright _ = GLT
-  gcompare _ ForeBright = GGT
-  gcompare BackColour BackColour = GEQ
-  gcompare BackColour _ = GLT
-  gcompare _ BackColour = GGT
-  gcompare BackBright BackBright = GEQ
-  gcompare BackBright _ = GLT
-  gcompare _ BackBright = GGT
-  gcompare IsBold IsBold = GEQ
-
-type Style = DMap Styling Identity
-
-infix 0 .==
-
-(.==) :: Styling t -> t -> Style -> Style
-(.==) k c s = DMap.insert k (Identity c) s
-
 compose :: [a -> a] -> a -> a
 compose = foldr (.) id
-
-brightISO :: Bool -> Vty.Color -> Vty.Color
-brightISO True (Vty.ISOColor n) = Vty.ISOColor (mod n 8 + 8)
-brightISO _ c = c
-
-styleAttr :: (Style -> Style) -> Vty.Attr -> Vty.Attr
-styleAttr onStyle = do
-  let stylings :: DMap Styling Identity
-      stylings = onStyle DMap.empty
-
-  let foreBright :: Bool
-      foreBright = any runIdentity (DMap.lookup ForeBright stylings)
-
-  let backBright :: Bool
-      backBright = any runIdentity (DMap.lookup BackBright stylings)
-
-  compose
-    [ DMap.lookup ForeColour stylings & maybe id \(Identity foreColour) ->
-        (`Vty.withForeColor` brightISO foreBright foreColour),
-      DMap.lookup BackColour stylings & maybe id \(Identity backColour) ->
-        (`Vty.withBackColor` brightISO backBright backColour),
-      DMap.lookup IsBold stylings & maybe id \(Identity isBold) -> case isBold of
-        False -> (`Vty.withStyle` Vty.defaultStyleMask)
-        True -> (`Vty.withStyle` Vty.bold)
-    ]
-
-rule :: a -> [b -> b] -> (a, b -> b)
-rule a b = (a, compose b)
-
-cascade ::
-  [(CellState Pat -> CellState Pat, Style -> Style)] ->
-  [(Brick.AttrName, Vty.Attr)]
-cascade xs = do
-  let expanded :: [(Brick.AttrName, Style -> Style)]
-      expanded = do
-        (csp, sty) <- xs
-        cs <- traverseCellState resolvePat (csp anyCellState)
-        [(cellStateAttrName cs, sty)]
-
-  let onAttrs :: (Style -> Style) -> Vty.Attr
-      onAttrs st = styleAttr st Vty.defAttr
-
-  Map.toList $ Map.fromListWith (.) expanded <&> onAttrs
-
-cellAttrMap :: [(Brick.AttrName, Vty.Attr)]
-cellAttrMap =
-  cascade
-    [ rule
-        withCell
-        [BackColour .== Vty.white],
-      rule
-        (withMatched [True])
-        [ IsBold .== True,
-          BackColour .== Vty.green
-        ],
-      rule
-        (withSelected [True])
-        [BackColour .== Vty.cyan],
-      rule
-        (withFocussed [True])
-        [BackBright .== True],
-      rule
-        (withContent [CellContentGiven])
-        [ForeColour .== Vty.black],
-      rule
-        (withContent [CellContentBlank, CellContentInput])
-        [ForeColour .== Vty.blue]
-    ]
 
 modeAttrMap :: [(Brick.AttrName, Vty.Attr)]
 modeAttrMap =
@@ -464,5 +333,5 @@ appAttrMap =
       [ logoAttrMap,
         helpAttrMap,
         modeAttrMap,
-        cellAttrMap
+        cellStateAttrMap
       ]

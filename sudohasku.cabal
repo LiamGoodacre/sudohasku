@@ -22,7 +22,8 @@ executable sudoku-tui
   other-modules:
     Domain,
     Drawing,
-    Shuffling
+    Shuffling,
+    VtyOptic
   default-extensions:
     ApplicativeDo,
     BlockArguments,
