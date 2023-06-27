@@ -15,57 +15,57 @@ import Data.List qualified as List
 import Data.Map.Strict qualified as Map
 import Data.Set (Set)
 import Data.Set qualified as Set
+import Data.Traversable qualified as Traversable
 import Domain
 import Graphics.Vty qualified as Vty
 import VtyOptic qualified as Vty
 
-data CellState t = CellState
-  { cellGiven :: !t,
-    cellMatch :: !t,
-    cellSelect :: !t,
-    cellFocus :: !t
-  }
-  deriving stock (Foldable, Functor, Traversable)
+newtype FiniteMap i o = FiniteMap (i -> o)
+  deriving newtype (Functor, Applicative)
 
-instance Applicative CellState where
-  pure v = CellState v v v v
-  l <*> r =
-    CellState
-      { cellGiven = cellGiven l (cellGiven r),
-        cellMatch = cellMatch l (cellMatch r),
-        cellSelect = cellSelect l (cellSelect r),
-        cellFocus = cellFocus l (cellFocus r)
-      }
+instance (Ord i, Universe i) => Foldable (FiniteMap i) where
+  foldMap = Traversable.foldMapDefault
 
-instance Universe t => Universe (CellState t) where
-  universe = sequence $ pure universe
+instance (Ord i, Universe i) => Traversable (FiniteMap i) where
+  traverse t (FiniteMap cell) = do
+    xs <- universe @i & traverse \f -> (f,) <$> t (cell f)
+    pure $ FiniteMap (Map.fromList xs Map.!)
 
-cellStateFeatureNames :: CellState String
-cellStateFeatureNames =
-  CellState
-    { cellGiven = "given",
-      cellMatch = "match",
-      cellSelect = "select",
-      cellFocus = "focus"
-    }
+instance (Ord i, Universe i, Universe o) => Universe (FiniteMap i o) where
+  universe = sequence (pure universe)
+
+data CellFeature
+  = CellGiven
+  | CellMatch
+  | CellSelect
+  | CellFocus
+  deriving (Show, Eq, Ord, Enum, Bounded)
+
+instance Universe CellFeature where
+  universe = [minBound .. maxBound]
+
+type CellState t = FiniteMap CellFeature t
+
+cellStateFeatureNames :: CellState CellFeature
+cellStateFeatureNames = FiniteMap id
 
 cellStateName :: CellState Bool -> Brick.AttrName
 cellStateName cs =
-  let flag :: String -> Bool -> Brick.AttrName
+  let flag :: CellFeature -> Bool -> Brick.AttrName
       flag m b = Brick.attrName $ show (m, b)
-   in Brick.attrName "cell" <> fold (flag <$> cellStateFeatureNames <*> cs)
+   in Brick.attrName "Cell" <> fold (flag <$> cellStateFeatureNames <*> cs)
 
 cellStateStyle :: CellState Bool -> Vty.Attr -> Vty.Attr
-cellStateStyle CellState {..} = do
+cellStateStyle (FiniteMap cell) = do
   let (.==>.) b v = if b then v else id
   compose $
     reverse
       [ Vty._attrBackColor .~ Vty.SetTo Vty.white,
-        cellMatch .==>. (`Vty.withStyle` Vty.bold),
-        cellMatch .==>. (Vty._attrBackColor .~ Vty.SetTo Vty.green),
-        cellSelect .==>. (Vty._attrBackColor .~ Vty.SetTo Vty.cyan),
-        Vty._attrBackColor . Vty._SetTo %~ (cellFocus .==>. Vty.brightISO),
-        Vty._attrForeColor .~ Vty.SetTo if cellGiven then Vty.black else Vty.blue
+        cell CellMatch .==>. (`Vty.withStyle` Vty.bold),
+        cell CellMatch .==>. (Vty._attrBackColor .~ Vty.SetTo Vty.green),
+        cell CellSelect .==>. (Vty._attrBackColor .~ Vty.SetTo Vty.cyan),
+        Vty._attrBackColor . Vty._SetTo %~ (cell CellFocus .==>. Vty.brightISO),
+        Vty._attrForeColor .~ Vty.SetTo if cell CellGiven then Vty.black else Vty.blue
       ]
 
 cellStateAttrMap :: [(Brick.AttrName, Vty.Attr)]
@@ -138,12 +138,11 @@ drawCell game loc = do
 
   let cellState :: CellState Bool
       cellState =
-        CellState
-          { cellGiven = isGiven,
-            cellSelect = Set.member loc (selected game),
-            cellMatch = matching,
-            cellFocus = focussed game == loc
-          }
+        FiniteMap \case
+          CellGiven -> isGiven
+          CellSelect -> Set.member loc (selected game)
+          CellMatch -> matching
+          CellFocus -> focussed game == loc
 
   let cellAttrs = cellStateName cellState
 
