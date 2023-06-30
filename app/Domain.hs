@@ -25,10 +25,11 @@ module Domain
     onFuture,
     undoableAction,
     runAction,
+    toBox,
   )
 where
 
-import Control.Lens (Lens', (%~), (.~), (^?))
+import Control.Lens (Lens', Traversal', (%~), (.~), (^?))
 import Control.Lens qualified as Lens
 import Data.Function ((&))
 import Data.Functor ((<&>))
@@ -167,16 +168,20 @@ onHighs t s = t (highs s) <&> \v -> s {highs = v}
 onLows :: Lens' Sudoku Marks
 onLows t s = t (lows s) <&> \v -> s {lows = v}
 
-onHighLows :: HighsOrLows -> Lens' Sudoku Marks
-onHighLows = \case
+onHighsOrLows :: HighsOrLows -> Lens' Sudoku Marks
+onHighsOrLows = \case
   Highs -> onHighs
   Lows -> onLows
 
-onMarks :: HighsOrLows -> Set (CellLoc Digit) -> Lens.Traversal' Sudoku (Set Digit)
-onMarks highLow targets =
-  onHighLows highLow
-    . Lens.itraversed
-    . Lens.indices (`Set.member` targets)
+onHighsAndLows :: Traversal' Sudoku Marks
+onHighsAndLows t s =
+  (\h l -> s {highs = h, lows = l})
+    <$> t (highs s)
+    <*> t (lows s)
+
+onMarks :: Set (CellLoc Digit) -> Traversal' Marks (Set Digit)
+onMarks targets =
+  Lens.itraversed . Lens.indices (`Set.member` targets)
 
 data Game = MkGame
   { showHelp :: Bool,
@@ -257,26 +262,64 @@ updateMarks :: HighsOrLows -> Digit -> Game -> Game
 updateMarks highLow digit st = do
   let targets = Set.insert (focussed st) (selected st)
 
-  let cellDigitMark :: Lens.Traversal' Game Bool
-      cellDigitMark = onSudoku . onMarks highLow targets . Lens.contains digit
+  let cellDigitMark :: Traversal' Game Bool
+      cellDigitMark = onSudoku . onHighsOrLows highLow . onMarks targets . Lens.contains digit
 
   st & cellDigitMark .~ not (st & Lens.andOf cellDigitMark)
 
+bandBox :: Band -> Band -> Set (CellLoc Digit)
+bandBox =
+  bands & foldMap \lilCol ->
+    bands & foldMap \lilRow ->
+      \bigCol bigRow ->
+        Set.singleton do
+          bandedGridCellLocation
+            bigCol
+            bigRow
+            lilCol
+            lilRow
+
+toBox :: CellLoc Digit -> Set (CellLoc Digit)
+toBox (CellLoc (CellCol col) (CellRow row)) = do
+  let bigCol = div (digitToInt col - 1) 3 + 1
+  let bigRow = div (digitToInt row - 1) 3 + 1
+  bandBox
+    (bandFromInt bigCol)
+    (bandFromInt bigRow)
+
+toRow :: CellLoc Digit -> Set (CellLoc Digit)
+toRow (CellLoc _ row) =
+  Set.fromList $ digits <&> \col -> CellLoc (CellCol col) row
+
+toCol :: CellLoc Digit -> Set (CellLoc Digit)
+toCol (CellLoc col _) =
+  Set.fromList $ digits <&> \row -> CellLoc col (CellRow row)
+
 enter :: Digit -> Game -> Game
 enter digit st = do
-  let targets = Set.insert (focussed st) (selected st)
+  let enterTargets = Set.insert (focussed st) (selected st)
+  let unmarkTargets = enterTargets & foldMap (toBox <> toRow <> toCol)
 
-  let cellDigit :: Lens.Traversal' Game (Maybe Digit)
+  let cellDigit :: Traversal' Game (Maybe Digit)
       cellDigit =
         onSudoku
           . onGrid
           . Lens.itraversed
-          . Lens.indices (`Set.member` targets)
+          . Lens.indices (`Set.member` enterTargets)
           . onCellInput
+
+  let cellMarks :: Traversal' Game Bool
+      cellMarks =
+        onSudoku
+          . onHighsAndLows
+          . onMarks unmarkTargets
+          . Lens.contains digit
 
   let g = st & Lens.allOf cellDigit (== Just digit)
 
-  st & cellDigit .~ if g then Nothing else Just digit
+  st
+    & cellDigit .~ (if g then Nothing else Just digit)
+    & cellMarks %~ (if g then id else const False)
 
 updateMatch :: Maybe Digit -> Game -> Game
 updateMatch digit st =
@@ -286,7 +329,7 @@ removeInsert :: Game -> Game
 removeInsert st = do
   let targets = Set.insert (focussed st) (selected st)
 
-  let cellDigit :: Lens.Traversal' Game (Maybe Digit)
+  let cellDigit :: Traversal' Game (Maybe Digit)
       cellDigit =
         onSudoku
           . onGrid
@@ -300,8 +343,8 @@ removeMarks :: HighsOrLows -> Game -> Game
 removeMarks highLow st = do
   let targets = Set.insert (focussed st) (selected st)
 
-  let cellMark :: Lens.Traversal' Game (Set Digit)
-      cellMark = onSudoku . onMarks highLow targets
+  let cellMark :: Traversal' Game (Set Digit)
+      cellMark = onSudoku . onHighsOrLows highLow . onMarks targets
 
   st & cellMark .~ Set.empty
 
