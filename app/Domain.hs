@@ -25,7 +25,8 @@ module Domain
     onFuture,
     undoableAction,
     runAction,
-    toBox,
+    initMarks,
+    initGame,
   )
 where
 
@@ -34,6 +35,7 @@ import Control.Lens qualified as Lens
 import Data.Function ((&))
 import Data.Functor ((<&>))
 import Data.Map.Strict (Map)
+import Data.Map.Strict qualified as Map
 import Data.Set (Set)
 import Data.Set qualified as Set
 
@@ -408,3 +410,27 @@ runAction = \case
             & onFuture .~ futu
             & onHistory %~ (sudoku game :)
             & onSudoku .~ next
+
+initMarks :: Marks
+initMarks = Map.fromList do
+  sequence (CellLoc (CellCol digits) (CellRow digits))
+    <&> \loc -> (loc, Set.empty)
+
+initGame :: Grid -> Game
+initGame grid =
+  MkGame
+    { showHelp = True,
+      selected = Set.empty,
+      focussed = CellLoc (CellCol D5) (CellRow D5),
+      mode = Insert,
+      match = Nothing,
+      lastAction = Nothing,
+      sudoku =
+        MkSudoku
+          { grid = grid,
+            highs = initMarks,
+            lows = initMarks
+          },
+      history = [],
+      future = []
+    }

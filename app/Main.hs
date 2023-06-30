@@ -6,9 +6,7 @@ where
 import Brick qualified as Brick
 import Control.Lens ((%~), (.~))
 import Data.Function ((&))
-import Data.Functor ((<&>))
 import Data.Map.Strict qualified as Map
-import Data.Set qualified as Set
 import Data.Void (Void)
 import Domain
 import Drawing qualified
@@ -98,33 +96,13 @@ initGrid _____ is =
     [_____, is D7, is D8, _____, _____, _____, _____, _____, is D6]
   ]
 
-initMarks :: Marks
-initMarks = Map.fromList do
-  sequence (CellLoc (CellCol digits) (CellRow digits))
-    <&> \loc -> (loc, Set.empty)
-
-initGame :: Shuffling.ShufflingSeeds Random.StdGen -> Game
-initGame seeds =
-  MkGame
-    { showHelp = True,
-      selected = Set.empty,
-      focussed = CellLoc (CellCol D5) (CellRow D5),
-      mode = Insert,
-      match = Nothing,
-      lastAction = Nothing,
-      sudoku =
-        MkSudoku
-          { grid = Shuffling.shuffledGrid seeds $ Map.fromList do
-              (row, initRow) <- zip digits (initGrid [Input Nothing] \d -> [Given d])
-              (col, initCell) <- zip digits initRow
-              cell <- initCell
-              [(CellLoc (CellCol col) (CellRow row), cell)],
-            highs = initMarks,
-            lows = initMarks
-          },
-      history = [],
-      future = []
-    }
+seedGrid :: Shuffling.ShufflingSeeds Random.StdGen -> Grid
+seedGrid seeds =
+  Shuffling.shuffledGrid seeds $ Map.fromList do
+    (row, initRow) <- zip digits (initGrid [Input Nothing] \d -> [Given d])
+    (col, initCell) <- zip digits initRow
+    cell <- initCell
+    [(CellLoc (CellCol col) (CellRow row), cell)]
 
 main :: IO ()
 main = do
@@ -135,5 +113,11 @@ main = do
   let seeds = Shuffling.shufflingSeeds seed
   let builder = Vty.mkVty Vty.defaultConfig
   initialVty <- builder
-  _ <- Brick.customMain initialVty builder Nothing app (initGame seeds)
+  _ <-
+    Brick.customMain
+      initialVty
+      builder
+      Nothing
+      app
+      (initGame (seedGrid seeds))
   pure ()
