@@ -20,7 +20,9 @@ executable sudoku-tui
   import:           warnings
   main-is:          Main.hs
   other-modules:
+    App,
     Domain,
+    Download,
     Drawing,
     Shuffling,
     VtyOptic
@@ -37,15 +39,19 @@ executable sudoku-tui
     TemplateHaskell,
     ViewPatterns
   build-depends:
+    aeson,
     base,
     brick,
     containers,
     dependent-map,
     dependent-sum,
+    http-conduit,
     lens,
     mtl,
     random,
     random-shuffle,
+    text,
+    time,
     vty
   hs-source-dirs:   app
   default-language: GHC2021
