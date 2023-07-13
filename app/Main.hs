@@ -57,5 +57,6 @@ main = do
       builder
       Nothing
       App.app
-      (initGame someGrid)
+      -- initAppState
+      (AppStateGame (initGame someGrid))
   pure ()

@@ -21,9 +21,16 @@ executable sudoku-tui
   main-is:          Main.hs
   other-modules:
     App,
+    Base.Drawing,
     Domain,
     Download,
     Drawing,
+    Game.Domain,
+    Game.Drawing,
+    Game.Inputs,
+    Menu.Domain,
+    Menu.Drawing,
+    Menu.Inputs,
     Shuffling,
     VtyOptic
   default-extensions:
