@@ -6,6 +6,7 @@ where
 
 import Brick qualified as Brick
 import Brick.Widgets.Center qualified as Brick
+import Data.Function ((&))
 import Graphics.Vty qualified as Vty
 import Menu.Domain
 
@@ -38,21 +39,31 @@ renderMenuItem = \case
         Brick.str
         [ " ┌┐   ┐ ",
           " ├ ┌┐┌┤ ",
-          " └┘┘└└┴ ",
-          "        "
+          " └┘┘└└┴ "
         ]
 
 menuDraw :: Menu -> [Brick.Widget names]
-menuDraw _menu =
+menuDraw menu =
   [ Brick.center do
       Brick.vBox
         [ Brick.hCenter logoDraw,
           Brick.hCenter (Brick.str "MENU"),
           Brick.hCenter $
             Brick.vBox $
-              renderMenuItem <$> menuItems
+              menuItems & fmap \item ->
+                ( if item == menuItemActive menu
+                    then Brick.withDefAttr (Brick.attrName "menu-item-active")
+                    else id
+                )
+                  $ renderMenuItem item
         ]
   ]
 
 menuAttrMap :: [(Brick.AttrName, Vty.Attr)]
-menuAttrMap = []
+menuAttrMap =
+  [ ( Brick.attrName "menu-item-active",
+      Vty.defAttr
+        `Vty.withForeColor` Vty.brightWhite
+        `Vty.withBackColor` Vty.green
+    )
+  ]

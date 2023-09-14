@@ -2,6 +2,9 @@ module Menu.Domain
   ( MenuItem (..),
     menuItems,
     Menu (..),
+    onMenuItemActive,
+    nextMenuItem,
+    prevMenuItem,
   )
 where
 
@@ -17,6 +20,19 @@ menuItems =
     End
   ]
 
+nextMenuItem :: MenuItem -> MenuItem
+nextMenuItem = \case
+  Play -> End
+  End -> Play
+
+prevMenuItem :: MenuItem -> MenuItem
+prevMenuItem = \case
+  Play -> End
+  End -> Play
+
 data Menu = Menu
-  { menuTodo :: ()
+  { menuItemActive :: MenuItem
   }
+
+onMenuItemActive :: Functor f => (MenuItem -> f MenuItem) -> Menu -> f Menu
+onMenuItemActive t m = (\v -> m {menuItemActive = v}) <$> t (menuItemActive m)

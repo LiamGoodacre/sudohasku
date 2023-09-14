@@ -14,4 +14,4 @@ data AppState
   | AppStateGame Game
 
 initAppState :: AppState
-initAppState = AppStateMenu Menu {menuTodo = ()}
+initAppState = AppStateMenu Menu {menuItemActive = Play}
