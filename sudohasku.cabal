@@ -48,7 +48,7 @@ executable sudohasku
   build-depends:
     aeson,
     base,
-    brick,
+    brick>=2.4,
     containers,
     dependent-map,
     dependent-sum,
@@ -59,7 +59,7 @@ executable sudohasku
     random-shuffle,
     text,
     time,
-    vty
+    vty>=6.0
   hs-source-dirs:   app
   default-language: GHC2021
   ghc-options: -threaded -rtsopts

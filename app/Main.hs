@@ -10,7 +10,6 @@ import Data.Map.Strict qualified as Map
 import Data.Maybe (fromMaybe)
 import Domain
 import Download qualified
-import Graphics.Vty qualified as Vty
 import Shuffling qualified
 import System.Environment qualified as Env
 import System.Random qualified as Random
@@ -49,13 +48,8 @@ main = do
     rawGrid <- Download.downloadAPuzzle <&> fromMaybe fallbackGrid
     pure $ Shuffling.shuffledGrid seeds rawGrid
 
-  let builder = Vty.mkVty Vty.defaultConfig
-  initialVty <- builder
   _ <-
-    Brick.customMain
-      initialVty
-      builder
-      Nothing
+    Brick.defaultMain
       App.app
       -- initAppState
       (AppStateGame (initGame someGrid))
