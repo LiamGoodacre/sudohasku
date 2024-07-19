@@ -30,7 +30,3 @@ _attrForeColor ::
 _attrForeColor onVal attr =
   onVal (Vty.attrForeColor attr)
     <&> \bc -> attr {Vty.attrForeColor = bc}
-
-brightISO :: Vty.Color -> Vty.Color
-brightISO (Vty.ISOColor n) = Vty.ISOColor (mod n 8 + 8)
-brightISO c = c

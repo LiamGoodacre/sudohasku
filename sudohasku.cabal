@@ -40,6 +40,7 @@ executable sudohasku
     GADTs,
     GHC2021,
     LambdaCase,
+    OverloadedRecordDot,
     OverloadedStrings,
     RecordWildCards,
     StrictData,

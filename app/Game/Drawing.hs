@@ -61,12 +61,12 @@ cellStateStyle (FiniteMap cell) = do
   let (.==>.) b v = if b then v else id
   compose $
     reverse
-      [ Vty._attrBackColor .~ Vty.SetTo Vty.white,
+      [ Vty._attrBackColor .~ Vty.SetTo theme.cellBG,
         cell CellMatch .==>. (`Vty.withStyle` Vty.bold),
-        cell CellMatch .==>. (Vty._attrBackColor .~ Vty.SetTo Vty.green),
-        cell CellSelect .==>. (Vty._attrBackColor .~ Vty.SetTo Vty.cyan),
-        Vty._attrBackColor . Vty._SetTo %~ (cell CellFocus .==>. Vty.brightISO),
-        Vty._attrForeColor .~ Vty.SetTo if cell CellGiven then Vty.black else Vty.blue
+        cell CellMatch .==>. (Vty._attrBackColor .~ Vty.SetTo theme.cellMatchBG),
+        cell CellSelect .==>. (Vty._attrBackColor .~ Vty.SetTo theme.cellSelectBG),
+        Vty._attrBackColor . Vty._SetTo %~ (cell CellFocus .==>. brighten),
+        Vty._attrForeColor .~ Vty.SetTo if cell CellGiven then theme.cellGivenFG else theme.cellInputFG
       ]
 
 cellStateAttrMap :: [(Brick.AttrName, Vty.Attr)]
@@ -92,8 +92,8 @@ drawMarks highs lows = do
           & Brick.withDefAttr (Brick.attrName "lows")
       ]
 
-drawBigDigit :: Digit -> Brick.Widget names
-drawBigDigit =
+drawBigDigitThin :: Digit -> Brick.Widget names
+drawBigDigitThin =
   Brick.vBox . map Brick.str . \case
     D1 -> ["   ┐   ", "   │   ", "   │   ", "   ┴   "]
     D2 -> ["  ┌─┐  ", "  ┌─┘  ", "  │    ", "  └─┘  "]
@@ -104,6 +104,29 @@ drawBigDigit =
     D7 -> ["  ┌─┐  ", "    │  ", "    │  ", "    ┴  "]
     D8 -> ["  ┌─┐  ", "  ├─┤  ", "  │ │  ", "  └─┘  "]
     D9 -> ["  ┌─┐  ", "  └─┤  ", "    │  ", "  └─┘  "]
+
+drawBigDigitThick :: Digit -> Brick.Widget names
+drawBigDigitThick =
+  Brick.vBox . map Brick.str . \case
+    D1 -> ["   ┓   ", "   ┃   ", "   ┃   ", "   ┻   "]
+    D2 -> ["  ┏━┓  ", "  ┏━┛  ", "  ┃    ", "  ┗━┛  "]
+    D3 -> ["  ┏━┓  ", "   ━┫  ", "    ┃  ", "  ┗━┛  "]
+    D4 -> ["  ┓ ┏  ", "  ┗━┫  ", "    ┃  ", "    ┻  "]
+    D5 -> ["  ┏━┓  ", "  ┗━┓  ", "    ┃  ", "  ┗━┛  "]
+    D6 -> ["  ┏━┓  ", "  ┣━┓  ", "  ┃ ┃  ", "  ┗━┛  "]
+    D7 -> ["  ┏━┓  ", "    ┃  ", "    ┃  ", "    ┻  "]
+    D8 -> ["  ┏━┓  ", "  ┣━┫  ", "  ┃ ┃  ", "  ┗━┛  "]
+    D9 -> ["  ┏━┓  ", "  ┗━┫  ", "    ┃  ", "  ┗━┛  "]
+
+-- hh ─ HH ━ vv │ VV ┃ dr ┌ dR ┍ Dr ┎ DR ┏ dl ┐ dL ┑ Dl ┒
+--
+-- LD ┓ ur └ uR ┕ Ur ┖ UR ┗ ul ┘ uL ┙ Ul ┚ UL ┛ vr ├ vR ┝
+--
+-- Vr ┠ VR ┣ vl ┤ vL ┥ Vl ┨ VL ┫ dh ┬ dH ┯ Dh ┰ DH ┳ uh ┴
+--
+-- uH ┷ Uh ┸ UH ┻ vh ┼ vH ┿ Vh ╂ VH ╋
+
+
 
 drawBands ::
   (Band -> Band -> Brick.Widget names) ->
@@ -146,6 +169,8 @@ drawCell game loc = do
           CellFocus -> focussed game == loc
 
   let cellAttrs = cellStateName cellState
+
+  let drawBigDigit = if matching then drawBigDigitThick else drawBigDigitThin
 
   let content = case val of
         Just (Given n) -> drawBigDigit n
@@ -271,23 +296,23 @@ modeAttrMap :: [(Brick.AttrName, Vty.Attr)]
 modeAttrMap =
   [ ( Brick.attrName "mode-normal",
       Vty.defAttr
-        `Vty.withBackColor` Vty.red
+        `Vty.withBackColor` theme.modeNormal
     ),
     ( Brick.attrName "mode-high-mark",
       Vty.defAttr
-        `Vty.withBackColor` Vty.brightBlue
+        `Vty.withBackColor` theme.modeHighMark
     ),
     ( Brick.attrName "mode-low-mark",
       Vty.defAttr
-        `Vty.withBackColor` Vty.blue
+        `Vty.withBackColor` theme.modeLowMark
     ),
     ( Brick.attrName "mode-highlight",
       Vty.defAttr
-        `Vty.withBackColor` Vty.green
+        `Vty.withBackColor` theme.modeHighlight
     ),
     ( Brick.attrName "mode-jump",
       Vty.defAttr
-        `Vty.withBackColor` Vty.magenta
+        `Vty.withBackColor` theme.modeJump
     )
   ]
 
@@ -295,8 +320,8 @@ helpAttrMap :: [(Brick.AttrName, Vty.Attr)]
 helpAttrMap =
   [ ( Brick.attrName "help",
       Vty.defAttr
-        `Vty.withForeColor` Vty.brightWhite
-        `Vty.withBackColor` Vty.cyan
+        `Vty.withForeColor` theme.barFG
+        `Vty.withBackColor` theme.barBG
     ),
     ( Brick.attrName "help-table",
       Vty.defAttr
