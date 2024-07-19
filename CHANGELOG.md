@@ -1,4 +1,4 @@
-# Revision history for sudoku-tui
+# Revision history for sudohasku
 
 ## 0.1.0.0 -- YYYY-mm-dd
 

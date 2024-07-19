@@ -16,7 +16,7 @@ extra-doc-files:    CHANGELOG.md
 common warnings
   ghc-options: -Wall -Werror -Wextra
 
-executable sudoku-tui
+executable sudohasku
   import:           warnings
   main-is:          Main.hs
   other-modules:
