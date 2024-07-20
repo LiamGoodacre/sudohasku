@@ -53,7 +53,7 @@ paletteWhite :: Vty.Color
 paletteWhite = rgb 203 205 202
 
 paletteBlue :: Vty.Color
-paletteBlue = rgb 35 87 137
+paletteBlue = rgb 22 121 171
 
 paletteRed :: Vty.Color
 paletteRed = rgb 255 60 56
@@ -70,8 +70,8 @@ paletteOrange = rgb 255 119 0
 palettePink :: Vty.Color
 palettePink = rgb 220 0 115
 
-paletteTODO :: Vty.Color
-paletteTODO = rgb 255 100 200
+_paletteTODO :: Vty.Color
+_paletteTODO = rgb 255 100 200
 
 data Theme a = Theme
   { screenBG :: !a,
@@ -97,9 +97,9 @@ theme =
       barFG = paletteWhite,
       modeNormal = paletteRed,
       modeHighMark = paletteOrange,
-      modeLowMark = palettePink,
+      modeLowMark = darken paletteOrange,
       modeHighlight = darken paletteGreen,
-      modeJump = paletteTODO,
+      modeJump = palettePink,
       cellBG = paletteWhite,
       cellMatchBG = paletteGreen,
       cellSelectBG = paletteTeal,
