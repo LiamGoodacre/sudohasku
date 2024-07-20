@@ -1,5 +1,6 @@
 module Game.Inputs
-  ( gameInputs,
+  ( GameOutput (..),
+    gameInputs,
   )
 where
 
@@ -9,8 +10,10 @@ import Data.Function ((&))
 import Game.Domain
 import Graphics.Vty qualified as Vty
 
-act :: Action -> Brick.EventM names Game ()
-act action =
+data GameOutput = Playing | Exited
+
+act :: Action -> Brick.EventM names Game GameOutput
+act action = do
   Brick.modify \st -> do
     let next =
           runAction action st
@@ -22,6 +25,7 @@ act action =
           & onFuture .~ []
           & onHistory %~ (sudoku st :)
       else next
+  pure Playing
 
 keyCharDigit :: Char -> Maybe Digit
 keyCharDigit = \case
@@ -36,10 +40,10 @@ keyCharDigit = \case
   '9' -> Just D9
   _ -> Nothing
 
-gameInputs :: Brick.BrickEvent names e -> Brick.EventM names Game ()
+gameInputs :: Brick.BrickEvent names e -> Brick.EventM names Game GameOutput
 gameInputs = \case
   Brick.VtyEvent vtyEvent -> case vtyEvent of
-    Vty.EvKey (Vty.KChar 'c') [Vty.MCtrl] -> Brick.halt
+    Vty.EvKey (Vty.KChar 'c') [Vty.MCtrl] -> Brick.halt >> pure Exited
     Vty.EvKey (Vty.KChar '?') _ -> act ToggleHelp
     Vty.EvKey Vty.KEsc _ -> act (SwitchMode Insert)
     Vty.EvKey (Vty.KChar '[') [Vty.MCtrl] -> act (SwitchMode Insert)
@@ -62,7 +66,8 @@ gameInputs = \case
     Vty.EvKey (Vty.KChar 'H') _ -> act (Move Expand West)
     Vty.EvKey (Vty.KChar 'u') _ -> act Undo
     Vty.EvKey (Vty.KChar 'r') _ -> act Redo
+    Vty.EvKey (Vty.KChar 'q') _ -> pure Exited
     Vty.EvKey (Vty.KChar c) _
       | Just d <- keyCharDigit c -> act (Enter d)
-    _ -> pure ()
-  _ -> pure ()
+    _ -> pure Playing
+  _ -> pure Playing

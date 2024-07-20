@@ -5,6 +5,7 @@ module Base.Drawing
     theme,
     logoDraw,
     logoAttrMap,
+    thickenChar,
   )
 where
 
@@ -127,3 +128,22 @@ logoAttrMap =
         `Vty.withBackColor` theme.barBG
     )
   ]
+
+-- hh ─ HH ━ vv │ VV ┃ dr ┌ dR ┍ Dr ┎ DR ┏ dl ┐ dL ┑ Dl ┒
+-- LD ┓ ur └ uR ┕ Ur ┖ UR ┗ ul ┘ uL ┙ Ul ┚ UL ┛ vr ├ vR ┝
+-- Vr ┠ VR ┣ vl ┤ vL ┥ Vl ┨ VL ┫ dh ┬ dH ┯ Dh ┰ DH ┳ uh ┴
+-- uH ┷ Uh ┸ UH ┻ vh ┼ vH ┿ Vh ╂ VH ╋
+thickenChar :: Char -> Char
+thickenChar = \case
+  '─' -> '━'
+  '│' -> '┃'
+  '┌' -> '┏'
+  '┐' -> '┓'
+  '└' -> '┗'
+  '┘' -> '┛'
+  '├' -> '┣'
+  '┤' -> '┫'
+  '┬' -> '┳'
+  '┴' -> '┻'
+  '┼' -> '╋'
+  c -> c

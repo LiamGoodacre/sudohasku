@@ -92,9 +92,9 @@ drawMarks highs lows = do
           & Brick.withDefAttr (Brick.attrName "lows")
       ]
 
-drawBigDigitThin :: Digit -> Brick.Widget names
-drawBigDigitThin =
-  Brick.vBox . map Brick.str . \case
+drawBigDigitWith :: (Char -> Char) -> Digit -> Brick.Widget names
+drawBigDigitWith f =
+  Brick.vBox . map (Brick.str . map f) . \case
     D1 -> ["   ┐   ", "   │   ", "   │   ", "   ┴   "]
     D2 -> ["  ┌─┐  ", "  ┌─┘  ", "  │    ", "  └─┘  "]
     D3 -> ["  ┌─┐  ", "   ─┤  ", "    │  ", "  └─┘  "]
@@ -105,28 +105,11 @@ drawBigDigitThin =
     D8 -> ["  ┌─┐  ", "  ├─┤  ", "  │ │  ", "  └─┘  "]
     D9 -> ["  ┌─┐  ", "  └─┤  ", "    │  ", "  └─┘  "]
 
+drawBigDigitThin :: Digit -> Brick.Widget names
+drawBigDigitThin = drawBigDigitWith id
+
 drawBigDigitThick :: Digit -> Brick.Widget names
-drawBigDigitThick =
-  Brick.vBox . map Brick.str . \case
-    D1 -> ["   ┓   ", "   ┃   ", "   ┃   ", "   ┻   "]
-    D2 -> ["  ┏━┓  ", "  ┏━┛  ", "  ┃    ", "  ┗━┛  "]
-    D3 -> ["  ┏━┓  ", "   ━┫  ", "    ┃  ", "  ┗━┛  "]
-    D4 -> ["  ┓ ┏  ", "  ┗━┫  ", "    ┃  ", "    ┻  "]
-    D5 -> ["  ┏━┓  ", "  ┗━┓  ", "    ┃  ", "  ┗━┛  "]
-    D6 -> ["  ┏━┓  ", "  ┣━┓  ", "  ┃ ┃  ", "  ┗━┛  "]
-    D7 -> ["  ┏━┓  ", "    ┃  ", "    ┃  ", "    ┻  "]
-    D8 -> ["  ┏━┓  ", "  ┣━┫  ", "  ┃ ┃  ", "  ┗━┛  "]
-    D9 -> ["  ┏━┓  ", "  ┗━┫  ", "    ┃  ", "  ┗━┛  "]
-
--- hh ─ HH ━ vv │ VV ┃ dr ┌ dR ┍ Dr ┎ DR ┏ dl ┐ dL ┑ Dl ┒
---
--- LD ┓ ur └ uR ┕ Ur ┖ UR ┗ ul ┘ uL ┙ Ul ┚ UL ┛ vr ├ vR ┝
---
--- Vr ┠ VR ┣ vl ┤ vL ┥ Vl ┨ VL ┫ dh ┬ dH ┯ Dh ┰ DH ┳ uh ┴
---
--- uH ┷ Uh ┸ UH ┻ vh ┼ vH ┿ Vh ╂ VH ╋
-
-
+drawBigDigitThick = drawBigDigitWith thickenChar
 
 drawBands ::
   (Band -> Band -> Brick.Widget names) ->
@@ -224,7 +207,8 @@ drawHelp = do
           ("Select & move North", "'K'", "*"),
           ("Select & move East", "'L'", "*"),
           ("Select & move South", "'J'", "*"),
-          ("Select & move West", "'H'", "*")
+          ("Select & move West", "'H'", "*"),
+          ("Close game", "'q'", "*")
         ]
 
   let tableRows =

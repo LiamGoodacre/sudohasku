@@ -4,6 +4,8 @@ module Menu.Drawing
   )
 where
 
+import Base.Drawing qualified as Theme
+import Base.Drawing (theme)
 import Brick qualified as Brick
 import Brick.Widgets.Center qualified as Brick
 import Data.Function ((&))
@@ -22,12 +24,12 @@ logoDraw =
           " └─┘ └─┘ ┴─┘ └─┘ ┘ └ ┘ └ └─┘ ┘ ┘ └─┘ "
         ]
 
-renderMenuItem :: MenuItem -> Brick.Widget names
-renderMenuItem = \case
+renderMenuItem :: (Char -> Char) -> MenuItem -> Brick.Widget names
+renderMenuItem f = \case
   Play ->
     Brick.vBox $
       map
-        Brick.str
+        (Brick.str . map f)
         [ " ┌┐┐     ",
           " ├┘│┌┐┐┌ ",
           " ┘ └└┴└┤ ",
@@ -36,10 +38,10 @@ renderMenuItem = \case
   End ->
     Brick.vBox $
       map
-        Brick.str
-        [ " ┌┐   ┐ ",
-          " ├ ┌┐┌┤ ",
-          " └┘┘└└┴ "
+        (Brick.str . map f)
+        [ " ┌┐   ┐  ",
+          " ├ ┌┐┌┤  ",
+          " └┘┘└└┴. "
         ]
 
 menuDraw :: Menu -> [Brick.Widget names]
@@ -53,9 +55,10 @@ menuDraw menu =
               menuItems & fmap \item ->
                 ( if item == menuItemActive menu
                     then Brick.withDefAttr (Brick.attrName "menu-item-active")
-                    else id
+                            $ renderMenuItem Theme.thickenChar item
+                    else Brick.withDefAttr (Brick.attrName "menu-item-inactive")
+                            $ renderMenuItem id item
                 )
-                  $ renderMenuItem item
         ]
   ]
 
@@ -63,7 +66,12 @@ menuAttrMap :: [(Brick.AttrName, Vty.Attr)]
 menuAttrMap =
   [ ( Brick.attrName "menu-item-active",
       Vty.defAttr
-        `Vty.withForeColor` Vty.brightWhite
-        `Vty.withBackColor` Vty.green
+        `Vty.withForeColor` theme.cellGivenFG
+        `Vty.withBackColor` Theme.brighten theme.cellSelectBG
+    ),
+    ( Brick.attrName "menu-item-inactive",
+      Vty.defAttr
+        `Vty.withForeColor` theme.cellGivenFG
+        `Vty.withBackColor` theme.cellBG
     )
   ]
