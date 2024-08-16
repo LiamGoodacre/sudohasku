@@ -11,6 +11,7 @@ import Data.Function ((&))
 import Data.Functor ((<&>))
 import Data.Map.Strict qualified as Map
 import Domain
+import GHC.Generics (Generic, Generic1, Generically (..), Generically1 (..))
 import System.Random qualified as Random
 import System.Random.Shuffle qualified as Shuffle
 
@@ -20,17 +21,10 @@ data PathPos t = PathPos
     posLilCol :: t,
     posLilRow :: t
   }
+  deriving stock (Generic, Generic1)
   deriving stock (Functor, Foldable, Traversable)
-
-instance Applicative PathPos where
-  pure x = PathPos x x x x
-  l <*> r =
-    PathPos
-      { posBigCol = posBigCol l (posBigCol r),
-        posBigRow = posBigRow l (posBigRow r),
-        posLilCol = posLilCol l (posLilCol r),
-        posLilRow = posLilRow l (posLilRow r)
-      }
+  deriving (Applicative) via Generically1 PathPos
+  deriving (Semigroup, Monoid) via Generically (PathPos t)
 
 data ShufflingSeeds a = ShufflingSeeds
   { digitsSeed :: a,
@@ -39,18 +33,10 @@ data ShufflingSeeds a = ShufflingSeeds
     lilColSeed :: a,
     lilRowSeed :: a
   }
+  deriving stock (Generic, Generic1)
   deriving stock (Functor, Foldable, Traversable)
-
-instance Applicative ShufflingSeeds where
-  pure x = ShufflingSeeds x x x x x
-  l <*> r =
-    ShufflingSeeds
-      { digitsSeed = digitsSeed l (digitsSeed r),
-        bigColSeed = bigColSeed l (bigColSeed r),
-        bigRowSeed = bigRowSeed l (bigRowSeed r),
-        lilColSeed = lilColSeed l (lilColSeed r),
-        lilRowSeed = lilRowSeed l (lilRowSeed r)
-      }
+  deriving (Applicative) via Generically1 ShufflingSeeds
+  deriving (Semigroup, Monoid) via Generically (ShufflingSeeds a)
 
 shufflingSeeds :: Random.StdGen -> ShufflingSeeds Random.StdGen
 shufflingSeeds = evalState $ sequence (pure $ state Random.split)

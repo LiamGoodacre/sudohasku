@@ -37,6 +37,7 @@ executable sudohasku
     ApplicativeDo,
     BlockArguments,
     DerivingStrategies,
+    DerivingVia,
     GADTs,
     GHC2021,
     LambdaCase,
