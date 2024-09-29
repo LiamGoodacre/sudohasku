@@ -9,7 +9,7 @@ module Base.Drawing
   )
 where
 
-import Brick qualified as Brick
+import Brick qualified
 import Data.Word (Word8)
 import Graphics.Vty qualified as Vty
 
@@ -18,7 +18,7 @@ rgb = Vty.rgbColor
 
 mapRGB :: (forall i . Integral i => i -> Word8) -> Vty.Color -> Vty.Color
 mapRGB onComponent col@(Vty.Color240 c240) =
-  case (Vty.color240CodeToRGB c240) of
+  case Vty.color240CodeToRGB c240 of
     Nothing -> col
     Just (r, g, b) ->
       rgb
