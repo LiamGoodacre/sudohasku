@@ -6,7 +6,7 @@ where
 
 import Base.Drawing qualified as Theme
 import Base.Drawing (theme)
-import Brick qualified as Brick
+import Brick qualified
 import Brick.Widgets.Center qualified as Brick
 import Data.Function ((&))
 import Graphics.Vty qualified as Vty

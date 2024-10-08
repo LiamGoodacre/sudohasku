@@ -64,7 +64,7 @@ appHandleEvent brickEvent =
       (g', result) <- Brick.nestEventM g (gameInputs brickEvent)
       case result of
         Playing -> Brick.put $ AppStateGame g'
-        Exited -> Brick.put $ initAppState
+        Exited -> Brick.put initAppState
 
 app :: Brick.App AppState e Void
 app =

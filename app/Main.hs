@@ -4,7 +4,7 @@ module Main
 where
 
 import App qualified
-import Brick qualified as Brick
+import Brick qualified
 import Domain
 
 main :: IO ()

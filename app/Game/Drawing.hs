@@ -5,7 +5,7 @@ module Game.Drawing
 where
 
 import Base.Drawing
-import Brick qualified as Brick
+import Brick qualified
 import Brick.Widgets.Center qualified as Brick
 import Brick.Widgets.Table qualified as Brick.Table
 import Control.Lens ((%~), (.~))
@@ -264,7 +264,7 @@ screenDraw game =
 gameDraw :: Game -> [Brick.Widget names]
 gameDraw game =
   fold
-    [ if showHelp game then [drawHelp] else [],
+    [ [drawHelp | showHelp game],
       [ Brick.center do
           Brick.vBox
             [ Brick.hCenter logoDraw,

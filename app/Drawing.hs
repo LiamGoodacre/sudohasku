@@ -5,7 +5,7 @@ module Drawing
 where
 
 import Base.Drawing
-import Brick qualified as Brick
+import Brick qualified
 import Data.Foldable (fold)
 import Domain
 import Game.Drawing
