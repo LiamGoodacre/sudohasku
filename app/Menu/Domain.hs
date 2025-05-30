@@ -34,5 +34,5 @@ data Menu = Menu
   { menuItemActive :: MenuItem
   }
 
-onMenuItemActive :: Functor f => (MenuItem -> f MenuItem) -> Menu -> f Menu
+onMenuItemActive :: (Functor f) => (MenuItem -> f MenuItem) -> Menu -> f Menu
 onMenuItemActive t m = (\v -> m {menuItemActive = v}) <$> t (menuItemActive m)

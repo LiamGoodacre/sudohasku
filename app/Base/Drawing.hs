@@ -1,7 +1,7 @@
 module Base.Drawing
   ( darken,
     brighten,
-    Theme(..),
+    Theme (..),
     theme,
     logoDraw,
     logoAttrMap,
@@ -16,7 +16,7 @@ import Graphics.Vty qualified as Vty
 rgb :: Word8 -> Word8 -> Word8 -> Vty.Color
 rgb = Vty.rgbColor
 
-mapRGB :: (forall i . Integral i => i -> Word8) -> Vty.Color -> Vty.Color
+mapRGB :: (forall i. (Integral i) => i -> Word8) -> Vty.Color -> Vty.Color
 mapRGB onComponent col@(Vty.Color240 c240) =
   case Vty.color240CodeToRGB c240 of
     Nothing -> col
@@ -33,11 +33,11 @@ mapRGB onComponent (Vty.RGBColor r g b) =
 mapRGB _onComponent (Vty.ISOColor n) =
   Vty.ISOColor (mod n 8 + 8)
 
-darkenRGBComponent :: Integral i => i -> Word8
+darkenRGBComponent :: (Integral i) => i -> Word8
 darkenRGBComponent w =
   fromInteger $ (fromIntegral w * 10) `div` 12
 
-brightenRGBComponent :: Integral i => i -> Word8
+brightenRGBComponent :: (Integral i) => i -> Word8
 brightenRGBComponent w =
   fromInteger $ min 255 $ (fromIntegral w * 12) `div` 10
 

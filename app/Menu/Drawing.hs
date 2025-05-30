@@ -4,8 +4,8 @@ module Menu.Drawing
   )
 where
 
-import Base.Drawing qualified as Theme
 import Base.Drawing (theme)
+import Base.Drawing qualified as Theme
 import Brick qualified
 import Brick.Widgets.Center qualified as Brick
 import Data.Function ((&))
@@ -54,10 +54,12 @@ menuDraw menu =
             Brick.vBox $
               menuItems & fmap \item ->
                 ( if item == menuItemActive menu
-                    then Brick.withDefAttr (Brick.attrName "menu-item-active")
-                            $ renderMenuItem Theme.thickenChar item
-                    else Brick.withDefAttr (Brick.attrName "menu-item-inactive")
-                            $ renderMenuItem id item
+                    then
+                      Brick.withDefAttr (Brick.attrName "menu-item-active") $
+                        renderMenuItem Theme.thickenChar item
+                    else
+                      Brick.withDefAttr (Brick.attrName "menu-item-inactive") $
+                        renderMenuItem id item
                 )
         ]
   ]

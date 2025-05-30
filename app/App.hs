@@ -4,19 +4,19 @@ module App
 where
 
 import Brick qualified
-import Data.Void (Void)
-import Domain
-import Drawing qualified
-import Game.Inputs
-import Menu.Inputs
+import Control.Monad.IO.Class qualified as MonadIO
 import Data.Functor ((<&>))
 import Data.Map.Strict qualified as Map
 import Data.Maybe (fromMaybe)
+import Data.Void (Void)
+import Domain
 import Download qualified
+import Drawing qualified
+import Game.Inputs
+import Menu.Inputs
 import Shuffling qualified
 import System.Environment qualified as Env
 import System.Random qualified as Random
-import Control.Monad.IO.Class qualified as MonadIO
 
 makeFallbackTable :: r -> (Digit -> r) -> [[r]]
 makeFallbackTable _____ is =

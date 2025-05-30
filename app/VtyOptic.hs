@@ -4,7 +4,7 @@ import Control.Lens
 import Graphics.Vty qualified as Vty
 
 _SetTo ::
-  Applicative f =>
+  (Applicative f) =>
   (a -> f b) ->
   Vty.MaybeDefault a ->
   f (Vty.MaybeDefault b)
@@ -14,7 +14,7 @@ _SetTo ab = \case
   Vty.SetTo a -> Vty.SetTo <$> ab a
 
 _attrBackColor ::
-  Applicative f =>
+  (Applicative f) =>
   (Vty.MaybeDefault Vty.Color -> f (Vty.MaybeDefault Vty.Color)) ->
   Vty.Attr ->
   f Vty.Attr
@@ -23,7 +23,7 @@ _attrBackColor onVal attr =
     <&> \bc -> attr {Vty.attrBackColor = bc}
 
 _attrForeColor ::
-  Applicative f =>
+  (Applicative f) =>
   (Vty.MaybeDefault Vty.Color -> f (Vty.MaybeDefault Vty.Color)) ->
   Vty.Attr ->
   f Vty.Attr

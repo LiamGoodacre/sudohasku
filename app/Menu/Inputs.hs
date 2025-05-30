@@ -5,7 +5,7 @@ module Menu.Inputs
 where
 
 import Brick qualified
-import Control.Lens ((%~), use)
+import Control.Lens (use, (%~))
 import Data.Function ((&))
 import Graphics.Vty qualified as Vty
 import Menu.Domain
