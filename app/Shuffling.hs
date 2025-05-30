@@ -39,7 +39,7 @@ data ShufflingSeeds a = ShufflingSeeds
   deriving (Semigroup, Monoid) via Generically (ShufflingSeeds a)
 
 shufflingSeeds :: Random.StdGen -> ShufflingSeeds Random.StdGen
-shufflingSeeds = evalState $ sequence (pure $ state Random.split)
+shufflingSeeds = evalState $ sequence (pure $ state Random.splitGen)
 
 shuffleUniverse :: forall a. (Ord a, Universe a) => Random.StdGen -> a -> a
 shuffleUniverse seed = do
